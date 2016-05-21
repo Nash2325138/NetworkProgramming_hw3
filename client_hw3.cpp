@@ -3,6 +3,8 @@
 #define MAXLINE 2048
 
 void hw3_client(FILE *fp, int servfd);
+ssize_t writen(int fd, const void *tosend, size_t n);
+int create_listenfd(int port);
 
 int main(int argc, char const *argv[])
 {
@@ -45,4 +47,40 @@ void hw3_client(FILE *fp, int servfd)
 			perror("read error");
 		}
 	}
+}
+
+
+ssize_t writen(int fd, const void *tosend, size_t n)
+{
+	size_t nleft;
+	ssize_t nwritten;
+	const char *ptr;
+	ptr = (const char *)tosend;
+	nleft = n;
+	while (nleft > 0) {
+		if ( (nwritten = write(fd, ptr, nleft)) <= 0) {
+			if (nwritten < 0 && errno == EINTR)
+				nwritten = 0; // and call write() again
+			else
+				return (-1); // error
+		}
+		nleft -= nwritten;
+		ptr += nwritten;
+ 	}
+	return (n);
+}
+
+int create_listenfd(int port)
+{
+	int listenfd;
+	struct sockaddr_in servaddr_in;
+
+	memset(&servaddr_in, 0, sizeof(servaddr_in));
+	servaddr_in.sin_family = AF_INET;
+	servaddr_in.sin_addr.s_addr = htonl(INADDR_ANY); // for any interface
+	servaddr_in.sin_port = htons(port);
+
+	listenfd = socket(AF_INET, SOCK_STREAM, 0);
+	bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in));
+	return listenfd;
 }

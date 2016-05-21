@@ -2,6 +2,7 @@
 
 #define LISTEN_Q 1024
 #define MAXLINE 2048
+#define CTRL_SIGNAL_PORT 7000
 
 static void *thread_function(void *arg);
 void hw3_service(int connfd, sockaddr_in cliaddr_in);
@@ -15,6 +16,18 @@ typedef struct Connect_info {
 	}
 }Connect_info;
 
+char wellcomeString[MAXLINE*20];
+void initial_string()
+{
+	strcpy(wellcomeString, "");
+	FILE * ascii = fopen("wellcome_ASCII.txt", "r");
+	char buffer[1024];
+	while( fgets(buffer, 1024, ascii) != NULL ){
+		strcat(wellcomeString, buffer);
+	}
+	fclose(ascii);
+}
+int create_listenfd(int port);
 int main(int argc, char const *argv[])
 {
 	if(argc != 2) {
@@ -22,17 +35,11 @@ int main(int argc, char const *argv[])
 		exit(EXIT_FAILURE);
 	}
  	//printf("!");
-	int listenfd;
-	struct sockaddr_in cliaddr_in, servaddr_in;
+	struct sockaddr_in cliaddr_in;
 	
-	memset(&servaddr_in, 0, sizeof(servaddr_in));
-	servaddr_in.sin_family = AF_INET;
-	servaddr_in.sin_addr.s_addr = htonl(INADDR_ANY); // for any interface
-	servaddr_in.sin_port = htons(atoi(argv[1]));
 
  	//printf("!");
-	listenfd = socket(AF_INET, SOCK_STREAM, 0);
-	bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in));
+	int listenfd = create_listenfd(atoi(argv[1]));
 	listen(listenfd, LISTEN_Q);
 
  	//printf("!");
@@ -76,10 +83,48 @@ void hw3_service(int connfd, sockaddr_in cliaddr_in)
 {
 	// use echo server for pthread test
 	ssize_t n;
-	char buf[MAXLINE];
-	while ( (n = read(connfd, buf, MAXLINE)) > 0) {
-		buf[n] = '\0';
-		printf("receive: %s", buf);
-		write(connfd, buf, n);
+	char recvline[MAXLINE];
+	//char sendline[MAXLINE*100];
+	while ( (n = read(connfd, recvline, MAXLINE)) > 0) {
+		recvline[n] = '\0';
+		printf("receive: %s", recvline);
+		write(connfd, recvline, n);
 	}
+}
+
+
+// Write "n" bytes to a descriptor.
+ssize_t writen(int fd, const void *tosend, size_t n)
+{
+	size_t nleft;
+	ssize_t nwritten;
+	const char *ptr;
+	ptr = (const char *)tosend;
+	nleft = n;
+	while (nleft > 0) {
+		if ( (nwritten = write(fd, ptr, nleft)) <= 0) {
+			if (nwritten < 0 && errno == EINTR)
+				nwritten = 0; // and call write() again
+			else
+				return (-1); // error
+		}
+		nleft -= nwritten;
+		ptr += nwritten;
+ 	}
+	return (n);
+}
+
+int create_listenfd(int port)
+{
+	int listenfd;
+	struct sockaddr_in servaddr_in;
+
+	memset(&servaddr_in, 0, sizeof(servaddr_in));
+	servaddr_in.sin_family = AF_INET;
+	servaddr_in.sin_addr.s_addr = htonl(INADDR_ANY); // for any interface
+	servaddr_in.sin_port = htons(port);
+
+	listenfd = socket(AF_INET, SOCK_STREAM, 0);
+	bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in));
+	return listenfd;
 }
