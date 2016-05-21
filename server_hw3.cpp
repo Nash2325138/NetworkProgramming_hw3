@@ -2,16 +2,18 @@
 
 #define LISTEN_Q 1024
 #define MAXLINE 2048
-#define CTRL_SIGNAL_PORT 7000
+#define SHOW_PORT 7000
 
 static void *thread_function(void *arg);
-void hw3_service(int connfd, sockaddr_in cliaddr_in);
+void hw3_service(int connfd, int showfd, sockaddr_in cliaddr_in);
 
 typedef struct Connect_info {
 	int *connfd;
+	int *showfd;
 	sockaddr_in *cliaddr_in;
-	Connect_info(int *_connfd, sockaddr_in *_cliaddr_in) {
+	Connect_info(int *_connfd, int *_showfd, struct sockaddr_in *_cliaddr_in) {
 		connfd = _connfd;
+		showfd = _showfd;
 		cliaddr_in = _cliaddr_in;
 	}
 }Connect_info;
@@ -39,21 +41,25 @@ int main(int argc, char const *argv[])
 	
 
  	//printf("!");
-	int listenfd = create_listenfd(atoi(argv[1]));
-	listen(listenfd, LISTEN_Q);
+	int ctrl_listenfd = create_listenfd(atoi(argv[1]));
+	int show_listenfd = create_listenfd(SHOW_PORT);
+	listen(ctrl_listenfd, LISTEN_Q);
+	listen(show_listenfd, LISTEN_Q);
 
  	//printf("!");
 	for( ; ; ) {
 		socklen_t clilen = sizeof(cliaddr_in);
-		int *connfd_ptr = (int *) malloc(sizeof(int));
-		*connfd_ptr = accept(listenfd, (struct sockaddr *)&cliaddr_in, &clilen); // will block until some client create connect
+		int *ctrlfd_ptr = (int *) malloc(sizeof(int));
+		int *showfd_ptr = (int *) malloc(sizeof(int));
+		*ctrlfd_ptr = accept(ctrl_listenfd, (struct sockaddr *)&cliaddr_in, &clilen); // will block until some client create connect
+		*showfd_ptr = accept(show_listenfd, (struct sockaddr *)&cliaddr_in, &clilen);
 
 		char cliAddrStr[INET_ADDRSTRLEN];
 		if( inet_ntop(AF_INET, &cliaddr_in.sin_addr, cliAddrStr, INET_ADDRSTRLEN) == NULL ) perror("inet_ntop error");
 		printf("Connection from %s, port: %d\n", cliAddrStr, ntohs(cliaddr_in.sin_port));
 
 		pthread_t tid;
-		Connect_info * info = new Connect_info(connfd_ptr, &cliaddr_in);
+		Connect_info * info = new Connect_info(ctrlfd_ptr, showfd_ptr, &cliaddr_in);
 		if( pthread_create(&tid, NULL, thread_function, info) != 0) fprintf(stderr, "pthread_create error.\n");
 	}
 
@@ -65,11 +71,13 @@ static void * thread_function(void *arg)
 {
 	Connect_info *info =  (Connect_info *)arg ;
 	int connfd = *(info->connfd);
+	int showfd = *(info->showfd);
 	sockaddr_in cliaddr_in = *(info->cliaddr_in);
 	free(info->connfd);
+	free(info->showfd);
 
 	pthread_detach(pthread_self());
-	hw3_service(connfd, cliaddr_in);
+	hw3_service(connfd, showfd, cliaddr_in);
 	
 	char cliAddrStr[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &cliaddr_in.sin_addr, cliAddrStr, INET_ADDRSTRLEN);	
@@ -79,16 +87,15 @@ static void * thread_function(void *arg)
 	return NULL;
 }
 
-void hw3_service(int connfd, sockaddr_in cliaddr_in)
+void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 {
-	// use echo server for pthread test
 	ssize_t n;
 	char recvline[MAXLINE];
-	//char sendline[MAXLINE*100];
-	while ( (n = read(connfd, recvline, MAXLINE)) > 0) {
+
+	while ( (n = read(ctrlfd, recvline, MAXLINE)) > 0) {
 		recvline[n] = '\0';
 		printf("receive: %s", recvline);
-		write(connfd, recvline, n);
+		write(showfd, recvline, n);
 	}
 }
 
