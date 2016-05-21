@@ -55,11 +55,31 @@ int main(int argc, char const *argv[])
 void hw3_client(FILE *fp, int ctrlfd)
 {
 	//char recvline[MAXLINE+1];
-	char sendline[MAXLINE];
+	char sendline[MAXLINE*100];
 	
 	while( fgets(sendline, MAXLINE, fp) != NULL ) {
-		if( write(ctrlfd, sendline, MAXLINE) < 0) perror("write error");
+		writen(ctrlfd, sendline, strlen(sendline));
 	}
+}
+
+/* use thread to receive ctrlfd's message ? Or I can use select ?? */
+static void * receive_ctrl_thread(void *arg)
+{
+	pthread_detach(pthread_self());
+	int ctrlfd = *((int *)arg);
+
+	char recvline[MAXLINE+1];
+	ssize_t n;
+	while( (n = read(ctrlfd, recvline, MAXLINE)) > 0) {
+		recvline[n] = '\0';
+		char command[100];
+		sscanf(recvline, " %s", command);
+		if(strcmp(command, "Update_file_info") == 0) {
+
+		}
+	}
+
+	return NULL;
 }
 
 static void * show_thread(void *arg)
@@ -110,4 +130,32 @@ int create_listenfd(int port)
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
 	bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in));
 	return listenfd;
+}
+
+void sprintFiles(char *sendline)
+{
+	DIR *dir;
+	if( (dir = opendir("."))==NULL ){
+		perror("opendir in listdir()");
+		return;
+	}
+    
+	struct dirent *entry;
+	char sendBuffer[MAXLINE];
+    int count = 0;
+    sendBuffer[0] = '\0';
+
+	entry = readdir(dir);
+	while(entry!=NULL)
+	{
+		if(entry->d_type == DT_DIR);
+		else {
+			strcat(sendBuffer, " ");
+	 		strcat(sendBuffer, entry->d_name);
+	 		count++;
+		}
+		entry = readdir(dir);
+	}
+	sprintf(sendline, "%d %s", count, sendBuffer);
+	return;
 }

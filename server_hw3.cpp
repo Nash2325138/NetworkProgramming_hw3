@@ -11,7 +11,7 @@ std::map<std::string, User *> accountMap;
 static void *thread_function(void *arg);
 void hw3_service(int connfd, int showfd, struct sockaddr_in cliaddr_in);
 ssize_t writen(int fd, const void *tosend, size_t n);
-void read_safe(int fd, char *recvline, int max);
+bool read_safe(int fd, char *recvline, int max);
 
 typedef struct Connect_info {
 	int connfd;
@@ -25,6 +25,8 @@ typedef struct Connect_info {
 }Connect_info;
 
 char wellcomeString[MAXLINE*20];
+char mainMenuString[MAXLINE];
+char Update_file_info_string[50];
 void initial_string()
 {
 	strcpy(wellcomeString, "");
@@ -35,6 +37,9 @@ void initial_string()
 		//printf("%s", buffer);
 	}
 	fclose(ascii);
+
+	strcpy(mainMenuString, "[SO]Show Others\n  [D_sure]Delete this account\n  [L]ogout\n");
+	strcpy(Update_file_info_string, "Update_file_info");
 }
 int create_listenfd(int port);
 int main(int argc, char const *argv[])
@@ -89,7 +94,6 @@ static void * thread_function(void *arg)
 	return NULL;
 }
 
-// main thread
 void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 {
 	char recvline[MAXLINE];
@@ -108,25 +112,26 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 		// request user's account
 		strcpy(sendline, "Account(enter \"new\" to register): ");
 		writen(showfd, sendline, strlen(sendline));
-		read_safe(ctrlfd, recvline, MAXLINE);
+		if( !read_safe(ctrlfd, recvline, MAXLINE) ) return;
 		sscanf(recvline, " %s", account);
 
 		if(strcmp(account, "new") == 0) {
 			for( ; ; ) {
 				strcpy(sendline, "New account: ");
 				writen(showfd, sendline, strlen(sendline));
-				read_safe(ctrlfd, recvline, MAXLINE);
+				if( !read_safe(ctrlfd, recvline, MAXLINE) ) return;
 				sscanf(recvline, " %s", account);
 
 				cppAccount.assign(account);
 				if( accountMap.find(cppAccount) == accountMap.end() ) {
 					strcpy(sendline, "---------- Account available ----------\nNew password: ");
 					writen(showfd, sendline, strlen(sendline));
-					read_safe(ctrlfd, recvline, MAXLINE);
+					if( !read_safe(ctrlfd, recvline, MAXLINE) ) return;
 					sscanf(recvline, " %s", password);
 					accountMap.insert( std::pair<std::string, User *>(cppAccount, new User(account, password)) );
 					// or use : accountMap[cppAccount] = new User(account, password);
 					loginSuccess = true;
+					accountMap.at(cppAccount)->logIn(ctrlfd, showfd, &cliaddr_in);
 					break;
 				} else {
 					strcpy(sendline, "---------- Account used ! ----------\n");
@@ -140,7 +145,7 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 			// request user's password
 			strcpy(sendline, "Password: ");
 			writen(showfd, sendline, strlen(sendline));
-			read_safe(ctrlfd, recvline, MAXLINE);
+			if( !read_safe(ctrlfd, recvline, MAXLINE) ) return;
 			sscanf(recvline, " %s", password);
 			if(accountMap.find(cppAccount) == accountMap.end()) {
 				strcpy(sendline, "No such account\n");
@@ -148,7 +153,8 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 				strcpy(sendline, "Password not fit\n");
 			} else {
 				strcpy(sendline, "Login success!\n");
-				loginSuccess = false;
+				accountMap.at(cppAccount)->logIn(ctrlfd, showfd, &cliaddr_in);
+				loginSuccess = true;
 			}
 			writen(showfd, sendline, strlen(sendline));
 		}
@@ -157,18 +163,22 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 	// reset no delay
 	//flag = 0; 
 	// setsockopt(showfd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
-	
+
+	accountMap.at(cppAccount)->write_to_showfd(wellcomeString);
+	accountMap.at(cppAccount)->write_to_ctrlfd(Update_file_info_string);
+	accountMap.at(cppAccount)->logOut();
 }
 
-void read_safe(int fd, char *recvline, int max)
+bool read_safe(int fd, char *recvline, int max)
 {
 	ssize_t n;
 	n = read(fd, recvline, max);
 	if( n <= 0) {
 		recvline[n] = '\0';
 		perror("read error");
+		return false;
 	}
-	return;
+	return true;
 }
 // Write "n" bytes to a descriptor.
 ssize_t writen(int fd, const void *tosend, size_t n)

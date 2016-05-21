@@ -1,4 +1,4 @@
-CC=g++ -Wall
+CC=g++ -std=c++11 -Wall
 ser_c=server_hw3.cpp
 cli_c=client_hw3.cpp
 cliName=HW3_103062224_Cli
