@@ -5,16 +5,16 @@
 #define SHOW_PORT 7000
 
 static void *thread_function(void *arg);
-void hw3_service(int connfd, int showfd, sockaddr_in cliaddr_in);
+void hw3_service(int connfd, int showfd, struct sockaddr_in cliaddr_in);
 
 typedef struct Connect_info {
-	int *connfd;
-	int *showfd;
-	sockaddr_in *cliaddr_in;
-	Connect_info(int *_connfd, int *_showfd, struct sockaddr_in *_cliaddr_in) {
+	int connfd;
+	int showfd;
+	sockaddr_in cliaddr_in;
+	Connect_info(int _connfd, int _showfd, struct sockaddr_in *_cliaddr_in) {
 		connfd = _connfd;
 		showfd = _showfd;
-		cliaddr_in = _cliaddr_in;
+		cliaddr_in = *_cliaddr_in;
 	}
 }Connect_info;
 
@@ -49,17 +49,15 @@ int main(int argc, char const *argv[])
  	//printf("!");
 	for( ; ; ) {
 		socklen_t clilen = sizeof(cliaddr_in);
-		int *ctrlfd_ptr = (int *) malloc(sizeof(int));
-		int *showfd_ptr = (int *) malloc(sizeof(int));
-		*ctrlfd_ptr = accept(ctrl_listenfd, (struct sockaddr *)&cliaddr_in, &clilen); // will block until some client create connect
-		*showfd_ptr = accept(show_listenfd, (struct sockaddr *)&cliaddr_in, &clilen);
+		int ctrlfd = accept(ctrl_listenfd, (struct sockaddr *)&cliaddr_in, &clilen); // will block until some client create connect
+		int showfd = accept(show_listenfd, (struct sockaddr *)&cliaddr_in, &clilen);
 
 		char cliAddrStr[INET_ADDRSTRLEN];
 		if( inet_ntop(AF_INET, &cliaddr_in.sin_addr, cliAddrStr, INET_ADDRSTRLEN) == NULL ) perror("inet_ntop error");
 		printf("Connection from %s, port: %d\n", cliAddrStr, ntohs(cliaddr_in.sin_port));
 
 		pthread_t tid;
-		Connect_info * info = new Connect_info(ctrlfd_ptr, showfd_ptr, &cliaddr_in);
+		Connect_info * info = new Connect_info(ctrlfd, showfd, &cliaddr_in);
 		if( pthread_create(&tid, NULL, thread_function, info) != 0) fprintf(stderr, "pthread_create error.\n");
 	}
 
@@ -70,20 +68,16 @@ int main(int argc, char const *argv[])
 static void * thread_function(void *arg)
 {
 	Connect_info *info =  (Connect_info *)arg ;
-	int connfd = *(info->connfd);
-	int showfd = *(info->showfd);
-	sockaddr_in cliaddr_in = *(info->cliaddr_in);
-	free(info->connfd);
-	free(info->showfd);
 
 	pthread_detach(pthread_self());
-	hw3_service(connfd, showfd, cliaddr_in);
+	hw3_service(info->connfd, info->showfd, info->cliaddr_in);
 	
 	char cliAddrStr[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &cliaddr_in.sin_addr, cliAddrStr, INET_ADDRSTRLEN);	
-	printf("%s, port: %d exit\n", cliAddrStr, ntohs(cliaddr_in.sin_port));
+	inet_ntop(AF_INET, &info->cliaddr_in.sin_addr, cliAddrStr, INET_ADDRSTRLEN);	
+	printf("%s, port: %d exit\n", cliAddrStr, ntohs(info->cliaddr_in.sin_port));
 	
-	close(connfd);
+	close(info->connfd);
+	delete info;
 	return NULL;
 }
 
