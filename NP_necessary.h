@@ -14,5 +14,6 @@
 
 #include <sys/stat.h>
 #include <dirent.h>
+#include <netinet/tcp.h>
 
 #include <pthread.h>

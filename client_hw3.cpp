@@ -10,6 +10,7 @@ static void * show_thread(void *arg);
 
 int main(int argc, char const *argv[])
 {
+	setbuf(stdout, NULL);
 	if(argc != 3) {
 		fprintf(stderr, "Usage: ./<execute> <server IP> <port>\n");
 	}

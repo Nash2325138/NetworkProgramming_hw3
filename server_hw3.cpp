@@ -1,11 +1,17 @@
 #include "NP_necessary.h"
+#include "User.h"
+#include <map>
 
 #define LISTEN_Q 1024
 #define MAXLINE 2048
 #define SHOW_PORT 7000
 
+std::map<std::string, User *> accountMap;
+
 static void *thread_function(void *arg);
 void hw3_service(int connfd, int showfd, struct sockaddr_in cliaddr_in);
+ssize_t writen(int fd, const void *tosend, size_t n);
+void read_safe(int fd, char *recvline, int max);
 
 typedef struct Connect_info {
 	int connfd;
@@ -26,6 +32,7 @@ void initial_string()
 	char buffer[1024];
 	while( fgets(buffer, 1024, ascii) != NULL ){
 		strcat(wellcomeString, buffer);
+		//printf("%s", buffer);
 	}
 	fclose(ascii);
 }
@@ -38,7 +45,7 @@ int main(int argc, char const *argv[])
 	}
  	//printf("!");
 	struct sockaddr_in cliaddr_in;
-	
+	initial_string();
 
  	//printf("!");
 	int ctrl_listenfd = create_listenfd(atoi(argv[1]));
@@ -77,23 +84,92 @@ static void * thread_function(void *arg)
 	printf("%s, port: %d exit\n", cliAddrStr, ntohs(info->cliaddr_in.sin_port));
 	
 	close(info->connfd);
+	close(info->showfd);
 	delete info;
 	return NULL;
 }
 
+// main thread
 void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 {
-	ssize_t n;
 	char recvline[MAXLINE];
+	char sendline[MAXLINE*200];
 
-	while ( (n = read(ctrlfd, recvline, MAXLINE)) > 0) {
-		recvline[n] = '\0';
-		printf("receive: %s", recvline);
-		write(showfd, recvline, n);
+	// login
+	char account[200];
+	char password[200];
+	std::string cppAccount;
+	// set no delay
+	//int flag = 1; 
+	//setsockopt(showfd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
+	bool loginSuccess = false;
+	while( !loginSuccess )
+	{
+		// request user's account
+		strcpy(sendline, "Account(enter \"new\" to register): ");
+		writen(showfd, sendline, strlen(sendline));
+		read_safe(ctrlfd, recvline, MAXLINE);
+		sscanf(recvline, " %s", account);
+
+		if(strcmp(account, "new") == 0) {
+			for( ; ; ) {
+				strcpy(sendline, "New account: ");
+				writen(showfd, sendline, strlen(sendline));
+				read_safe(ctrlfd, recvline, MAXLINE);
+				sscanf(recvline, " %s", account);
+
+				cppAccount.assign(account);
+				if( accountMap.find(cppAccount) == accountMap.end() ) {
+					strcpy(sendline, "---------- Account available ----------\nNew password: ");
+					writen(showfd, sendline, strlen(sendline));
+					read_safe(ctrlfd, recvline, MAXLINE);
+					sscanf(recvline, " %s", password);
+					accountMap.insert( std::pair<std::string, User *>(cppAccount, new User(account, password)) );
+					// or use : accountMap[cppAccount] = new User(account, password);
+					loginSuccess = true;
+					break;
+				} else {
+					strcpy(sendline, "---------- Account used ! ----------\n");
+					writen(showfd, sendline, strlen(sendline));
+					continue;
+				}
+			}
+		}
+		else {
+			cppAccount.assign(account);
+			// request user's password
+			strcpy(sendline, "Password: ");
+			writen(showfd, sendline, strlen(sendline));
+			read_safe(ctrlfd, recvline, MAXLINE);
+			sscanf(recvline, " %s", password);
+			if(accountMap.find(cppAccount) == accountMap.end()) {
+				strcpy(sendline, "No such account\n");
+			} else if( strcmp(accountMap.at(cppAccount)->password, password) != 0) {
+				strcpy(sendline, "Password not fit\n");
+			} else {
+				strcpy(sendline, "Login success!\n");
+				loginSuccess = false;
+			}
+			writen(showfd, sendline, strlen(sendline));
+		}
+			
 	}
+	// reset no delay
+	//flag = 0; 
+	// setsockopt(showfd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
+	
 }
 
-
+void read_safe(int fd, char *recvline, int max)
+{
+	ssize_t n;
+	n = read(fd, recvline, max);
+	if( n <= 0) {
+		recvline[n] = '\0';
+		perror("read error");
+	}
+	return;
+}
 // Write "n" bytes to a descriptor.
 ssize_t writen(int fd, const void *tosend, size_t n)
 {
