@@ -69,7 +69,7 @@ public:
 	void write_to_ctrlfd(char *sendBuffer)
 	{
 		pthread_mutex_lock(&ctrlfd_mutex);
-		writen(showfd, sendBuffer, strlen(sendBuffer));
+		writen(ctrlfd, sendBuffer, strlen(sendBuffer));
 		pthread_mutex_unlock(&ctrlfd_mutex);
 	}
 };

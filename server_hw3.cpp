@@ -166,6 +166,8 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 
 	accountMap.at(cppAccount)->write_to_showfd(wellcomeString);
 	accountMap.at(cppAccount)->write_to_ctrlfd(Update_file_info_string);
+	read_safe(ctrlfd, recvline, MAXLINE);
+	printf("recvline: %s", recvline);
 	accountMap.at(cppAccount)->logOut();
 }
 

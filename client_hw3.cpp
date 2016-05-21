@@ -7,6 +7,8 @@ void hw3_client(FILE *fp, int ctrlfd);
 ssize_t writen(int fd, const void *tosend, size_t n);
 int create_listenfd(int port);
 static void * show_thread(void *arg);
+static void * receive_ctrl_thread(void *arg);
+void sprintFiles(char *sendline);
 
 int main(int argc, char const *argv[])
 {
@@ -56,7 +58,9 @@ void hw3_client(FILE *fp, int ctrlfd)
 {
 	//char recvline[MAXLINE+1];
 	char sendline[MAXLINE*100];
-	
+	pthread_t tid;
+	if( pthread_create(&tid, NULL, receive_ctrl_thread, &ctrlfd) != 0) fprintf(stderr, "pthread_create error.\n");
+
 	while( fgets(sendline, MAXLINE, fp) != NULL ) {
 		writen(ctrlfd, sendline, strlen(sendline));
 	}
@@ -69,13 +73,15 @@ static void * receive_ctrl_thread(void *arg)
 	int ctrlfd = *((int *)arg);
 
 	char recvline[MAXLINE+1];
+	char sendline[MAXLINE*10];
 	ssize_t n;
 	while( (n = read(ctrlfd, recvline, MAXLINE)) > 0) {
 		recvline[n] = '\0';
 		char command[100];
 		sscanf(recvline, " %s", command);
 		if(strcmp(command, "Update_file_info") == 0) {
-
+			sprintFiles(sendline);
+			writen(ctrlfd, sendline, strlen(sendline));
 		}
 	}
 
