@@ -2,16 +2,19 @@
 
 #define MAXLINE 2048
 #define SHOW_PORT 7000
+#define CHAT_PORT 7878
+#define LISTEN_Q 1024
 
 void hw3_client(FILE *fp, int ctrlfd);
 ssize_t writen(int fd, const void *tosend, size_t n);
 int create_listenfd(int port);
 static void * show_thread(void *arg);
-static void * receive_ctrl_thread(void *arg);
+static void * ctrl_receive_thread(void *arg);
 
 static void * chat_creator(void *arg);
 static void * char_acceptor(void *arg);
 void sprintFiles(char *sendline);
+void fillInfo(struct sockaddr_in *servaddr, int port, const char *ip_v4);
 
 int main(int argc, char const *argv[])
 {
@@ -22,10 +25,7 @@ int main(int argc, char const *argv[])
 
 	// family, port, address setting
 	struct sockaddr_in servaddr;
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(atoi(argv[2]));
-	memset(servaddr.sin_zero, 0, sizeof(servaddr.sin_zero));
-	if(inet_pton(AF_INET, argv[1], &servaddr.sin_addr) <= 0) perror("inet_pton error");
+	fillInfo(&servaddr, atoi(argv[2]), argv[1]);
 
 	// connect a ctrlfd
 	int ctrlfd;
@@ -36,10 +36,7 @@ int main(int argc, char const *argv[])
 
 
 	// family, port, address setting
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(SHOW_PORT);
-	memset(servaddr.sin_zero, 0, sizeof(servaddr.sin_zero));
-	if(inet_pton(AF_INET, argv[1], &servaddr.sin_addr) <= 0) perror("inet_pton error");
+	fillInfo(&servaddr, SHOW_PORT, argv[1]);
 
 	// connect a showfd
 	int showfd;
@@ -62,7 +59,7 @@ void hw3_client(FILE *fp, int ctrlfd)
 	//char recvline[MAXLINE+1];
 	char sendline[MAXLINE*100];
 	pthread_t tid;
-	if( pthread_create(&tid, NULL, receive_ctrl_thread, &ctrlfd) != 0) fprintf(stderr, "pthread_create error.\n");
+	if( pthread_create(&tid, NULL, ctrl_receive_thread, &ctrlfd) != 0) fprintf(stderr, "pthread_create error.\n");
 
 	while( fgets(sendline, MAXLINE, fp) != NULL ) {
 		writen(ctrlfd, sendline, strlen(sendline));
@@ -70,7 +67,7 @@ void hw3_client(FILE *fp, int ctrlfd)
 }
 
 /* use thread to receive ctrlfd's message ? Or I can use select ?? */
-static void * receive_ctrl_thread(void *arg)
+static void * ctrl_receive_thread(void *arg)
 {
 	pthread_detach(pthread_self());
 	int ctrlfd = *((int *)arg);
@@ -87,7 +84,8 @@ static void * receive_ctrl_thread(void *arg)
 			sprintFiles(sendline);
 			writen(ctrlfd, sendline, strlen(sendline));
 		} else if(strcmp(command, "Listen_Chat") == 0) {
-
+			int chatListenfd = create_listenfd(CHAT_PORT);
+			listen(chatListenfd, LISTEN_Q);
 		} else if(strcmp(command, "Connect_Chat") == 0) {
 			char address[100];
 		}
@@ -98,11 +96,11 @@ static void * receive_ctrl_thread(void *arg)
 
 static void * chat_creator(void *arg)
 {
-
+	return NULL;
 }
 static void * char_acceptor(void *arg)
 {
-
+	return NULL;
 }
 
 static void * show_thread(void *arg)
@@ -154,7 +152,13 @@ int create_listenfd(int port)
 	bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in));
 	return listenfd;
 }
-
+void fillInfo(struct sockaddr_in *servaddr, int port, const char *ip_v4)
+{
+	servaddr->sin_family = AF_INET;
+	servaddr->sin_port = htons(port);
+	memset(servaddr->sin_zero, 0, sizeof(servaddr->sin_zero));
+	if(inet_pton(AF_INET, ip_v4, &servaddr->sin_addr) <= 0) perror("inet_pton error");
+}
 void sprintFiles(char *sendline)
 {
 	DIR *dir;
