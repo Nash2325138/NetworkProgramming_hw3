@@ -8,7 +8,9 @@ typedef enum {
 
 #include <string>
 #include <set>
+#include <vector>
 #include <algorithm>
+#include <iostream>
 
 #define MAXLINE 2048
 extern char wellcomeString[MAXLINE*20];
@@ -24,6 +26,10 @@ public:
 	int showfd, ctrlfd;
 	pthread_mutex_t showfd_mutex;
 	pthread_mutex_t ctrlfd_mutex;
+	std::vector<std::string> fileList;
+
+	static std::set<User *> onlineUsers;
+	static pthread_mutex_t onlineUsers_mutex;
 
 	User(char *account, char *password)
 	{
@@ -33,17 +39,17 @@ public:
 		strcpy(this->password, password);
 		password[0] = '\0';
 		state = OFFLINE;
+		fileList.clear();
 	}
 	~User()
 	{
 
 	}
-	void catWellcomeToBuffer(char *sendBuffer)
+	static void catOnlineUsers(char *sendline)
 	{
-		strcat(sendBuffer, wellcomeString);
-		strcat(sendBuffer, "Hello ");
-		strcat(sendBuffer, account);
-		strcat(sendBuffer, "!\n");
+		for(std::set<User *>::iterator iter = User::onlineUsers.begin() ; iter != User::onlineUsers.end() ; iter++) {
+			strcat(sendline, (*iter)->account);
+		}
 	}
 	void logIn(int ctrlfd, int showfd, struct sockaddr_in * _cliaddr_in)
 	{
@@ -71,6 +77,23 @@ public:
 		pthread_mutex_lock(&ctrlfd_mutex);
 		writen(ctrlfd, sendBuffer, strlen(sendBuffer));
 		pthread_mutex_unlock(&ctrlfd_mutex);
+	}
+	void update_files(char *recvline)
+	{
+		fileList.clear();
+		char num[10];
+		sscanf(recvline, "%s", num);
+		char *position = recvline + (strlen(num) + 1);
+		char getName[100];
+		for(int i=0 ; i<atoi(num) ; i++) {
+			sscanf(position, "%s", getName);
+			fileList.push_back( std::string(getName) );
+			position += (strlen(getName) + 1);
+		}
+		std::cout << "User " << this->account << " has files:" << std::endl;
+		for(std::vector<std::string>::iterator iter = fileList.begin() ; iter != fileList.end() ; iter++) {
+			std::cout << "   " << *iter << std::endl;
+		}
 	}
 };
 

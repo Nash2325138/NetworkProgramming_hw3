@@ -1,6 +1,7 @@
 #include "NP_necessary.h"
 #include "User.h"
 #include <map>
+#include <set>
 
 #define LISTEN_Q 1024
 #define MAXLINE 2048
@@ -38,7 +39,10 @@ void initial_string()
 	}
 	fclose(ascii);
 
-	strcpy(mainMenuString, "[SO]Show Others\n  [D_sure]Delete this account\n  [L]ogout\n");
+	strcpy(mainMenuString, "------------------------------------\n");
+	strcat(mainMenuString, "  [SO]Show Others\n  [C]hat with <account>\n  [D_sure]Delete this account\n  [L]ogout\n  [H]elp\n");
+	strcat(mainMenuString, "------------------------------------\n");
+
 	strcpy(Update_file_info_string, "Update_file_info");
 }
 int create_listenfd(int port);
@@ -96,7 +100,7 @@ static void * thread_function(void *arg)
 
 void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 {
-	char recvline[MAXLINE];
+	char recvline[MAXLINE+1];
 	char sendline[MAXLINE*200];
 
 	// login
@@ -167,7 +171,30 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 	accountMap.at(cppAccount)->write_to_showfd(wellcomeString);
 	accountMap.at(cppAccount)->write_to_ctrlfd(Update_file_info_string);
 	read_safe(ctrlfd, recvline, MAXLINE);
-	printf("recvline: %s", recvline);
+	//printf("recvline: %s", recvline);
+	accountMap.at(cppAccount)->update_files(recvline);
+
+	char command[MAXLINE];
+	accountMap.at(cppAccount)->write_to_showfd(mainMenuString);
+	// [SO]Show Others  [C]hat with <account>  [D_sure]Delete this account  [L]ogout  [H]elp
+	while( read_safe(ctrlfd, recvline, MAXLINE))
+	{
+		sscanf(recvline, "%s", command);
+		if(strcmp(command, "SO") == 0) {
+			//User::catOnlineUsers(sendline);
+			accountMap.at(cppAccount)->write_to_showfd(sendline);
+		} else if(strcmp(command, "C") == 0) {
+
+		} else if(strcmp(command, "D_sure") == 0) {
+
+		} else if(strcmp(command, "L") == 0) {
+			accountMap.at(cppAccount)->logOut();
+			return;
+		} else if(strcmp(command, "H") == 0) {
+			accountMap.at(cppAccount)->write_to_showfd(mainMenuString);
+		}
+	}
+
 	accountMap.at(cppAccount)->logOut();
 }
 
