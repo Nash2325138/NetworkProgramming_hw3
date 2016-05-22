@@ -15,6 +15,8 @@ typedef enum {
 #define MAXLINE 2048
 extern char wellcomeString[MAXLINE*20];
 extern ssize_t writen(int fd, const void *tosend, size_t n);
+class User;
+extern std::set<User *> onlineUsers;
 
 class User
 {
@@ -27,9 +29,6 @@ public:
 	pthread_mutex_t showfd_mutex;
 	pthread_mutex_t ctrlfd_mutex;
 	std::vector<std::string> fileList;
-
-	static std::set<User *> onlineUsers;
-	static pthread_mutex_t onlineUsers_mutex;
 
 	User(char *account, char *password)
 	{
@@ -45,12 +44,6 @@ public:
 	{
 
 	}
-	static void catOnlineUsers(char *sendline)
-	{
-		for(std::set<User *>::iterator iter = User::onlineUsers.begin() ; iter != User::onlineUsers.end() ; iter++) {
-			strcat(sendline, (*iter)->account);
-		}
-	}
 	void logIn(int ctrlfd, int showfd, struct sockaddr_in * _cliaddr_in)
 	{
 		pthread_mutex_init(&showfd_mutex, NULL);
@@ -59,12 +52,14 @@ public:
 		this->showfd = showfd;
 		this->state = ONLINE;
 		this->addr_in = (* _cliaddr_in);
+		onlineUsers.insert(this);
 	}
 	void logOut()
 	{
 		pthread_mutex_init(&showfd_mutex, NULL);
 		pthread_mutex_init(&ctrlfd_mutex, NULL);
 		this->state = OFFLINE;
+		onlineUsers.erase(this);
 	}
 	void write_to_showfd(char *sendBuffer)
 	{
@@ -94,6 +89,10 @@ public:
 		for(std::vector<std::string>::iterator iter = fileList.begin() ; iter != fileList.end() ; iter++) {
 			std::cout << "   " << *iter << std::endl;
 		}
+	}
+	void getIP(char *buffer)
+	{
+		inet_ntop(AF_INET, &this->addr_in.sin_addr, buffer, INET_ADDRSTRLEN);
 	}
 };
 

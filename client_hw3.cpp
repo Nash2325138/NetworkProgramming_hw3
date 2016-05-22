@@ -8,6 +8,9 @@ ssize_t writen(int fd, const void *tosend, size_t n);
 int create_listenfd(int port);
 static void * show_thread(void *arg);
 static void * receive_ctrl_thread(void *arg);
+
+static void * chat_creator(void *arg);
+static void * char_acceptor(void *arg);
 void sprintFiles(char *sendline);
 
 int main(int argc, char const *argv[])
@@ -77,15 +80,29 @@ static void * receive_ctrl_thread(void *arg)
 	ssize_t n;
 	while( (n = read(ctrlfd, recvline, MAXLINE)) > 0) {
 		recvline[n] = '\0';
+		printf("          ctrlfd receive: %s\n", recvline);
 		char command[100];
 		sscanf(recvline, " %s", command);
 		if(strcmp(command, "Update_file_info") == 0) {
 			sprintFiles(sendline);
 			writen(ctrlfd, sendline, strlen(sendline));
+		} else if(strcmp(command, "Listen_Chat") == 0) {
+
+		} else if(strcmp(command, "Connect_Chat") == 0) {
+			char address[100];
 		}
 	}
 
 	return NULL;
+}
+
+static void * chat_creator(void *arg)
+{
+
+}
+static void * char_acceptor(void *arg)
+{
+
 }
 
 static void * show_thread(void *arg)

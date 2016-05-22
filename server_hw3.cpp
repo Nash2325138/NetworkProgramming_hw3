@@ -8,6 +8,9 @@
 #define SHOW_PORT 7000
 
 std::map<std::string, User *> accountMap;
+std::set<User *> onlineUsers;
+pthread_mutex_t onlineUsers_mutex;
+void catOnlineUsers(char *sendline);
 
 static void *thread_function(void *arg);
 void hw3_service(int connfd, int showfd, struct sockaddr_in cliaddr_in);
@@ -28,8 +31,10 @@ typedef struct Connect_info {
 char wellcomeString[MAXLINE*20];
 char mainMenuString[MAXLINE];
 char Update_file_info_string[50];
-void initial_string()
+void initial()
 {
+	pthread_mutex_init(&onlineUsers_mutex, NULL);
+
 	strcpy(wellcomeString, "");
 	FILE * ascii = fopen("wellcome_ASCII.txt", "r");
 	char buffer[1024];
@@ -54,7 +59,7 @@ int main(int argc, char const *argv[])
 	}
  	//printf("!");
 	struct sockaddr_in cliaddr_in;
-	initial_string();
+	initial();
 
  	//printf("!");
 	int ctrl_listenfd = create_listenfd(atoi(argv[1]));
@@ -181,10 +186,31 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 	{
 		sscanf(recvline, "%s", command);
 		if(strcmp(command, "SO") == 0) {
-			//User::catOnlineUsers(sendline);
+			sendline[0] = '\0';
+			catOnlineUsers(sendline);
 			accountMap.at(cppAccount)->write_to_showfd(sendline);
 		} else if(strcmp(command, "C") == 0) {
+			char target[100];
+			sscanf(recvline, "%*s %s", target);
+			std::string cppTarget(target);
+			if(accountMap.find(cppTarget) == accountMap.end()) {
+				sprintf(sendline, "   No such account: %s\n", target);
+				accountMap.at(cppAccount)->write_to_showfd(sendline);
+			} else if(accountMap.at(cppTarget)->state == OFFLINE) {
+				sprintf(sendline, "   This account is offline\n");
+				accountMap.at(cppAccount)->write_to_showfd(sendline);
+			} else {
+				sprintf(sendline, "   Establishing connection between %s and %s...", cppAccount.c_str(), target);
+				accountMap.at(cppAccount)->write_to_showfd(sendline);
+				
+				sprintf(sendline, "Listen_Chat");
+				accountMap.at(cppAccount)->write_to_ctrlfd(sendline);
 
+				char temp[200];
+				accountMap.at(cppAccount)->getIP(temp);
+				sprintf(sendline, "Connect_Chat %s", temp);
+				accountMap.at(cppTarget)->write_to_ctrlfd(sendline);
+			}
 		} else if(strcmp(command, "D_sure") == 0) {
 
 		} else if(strcmp(command, "L") == 0) {
@@ -243,4 +269,16 @@ int create_listenfd(int port)
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
 	bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in));
 	return listenfd;
+}
+
+void catOnlineUsers(char *sendline)
+{
+	char temp[100];
+	strcat(sendline, "Online users:\n");
+	pthread_mutex_lock(&onlineUsers_mutex);
+	for(std::set<User *>::iterator iter = onlineUsers.begin() ; iter != onlineUsers.end() ; iter++) {
+		sprintf(temp, "%10s, ", (*iter)->account);
+		strcat(sendline, temp);
+	}
+	pthread_mutex_unlock(&onlineUsers_mutex);
 }
