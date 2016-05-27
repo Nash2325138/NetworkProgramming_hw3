@@ -203,12 +203,12 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 				sprintf(sendline, "   Establishing connection between %s and %s...", cppAccount.c_str(), target);
 				accountMap.at(cppAccount)->write_to_showfd(sendline);
 				
-				sprintf(sendline, "Listen_Chat");
+				sprintf(sendline, "Listen_Chat %s", target);
 				accountMap.at(cppAccount)->write_to_ctrlfd(sendline);
 
 				char temp[200];
 				accountMap.at(cppAccount)->getIP(temp);
-				sprintf(sendline, "Connect_Chat %s", temp);
+				sprintf(sendline, "Connect_Chat %s %s", temp, cppAccount.c_str());
 				accountMap.at(cppTarget)->write_to_ctrlfd(sendline);
 			}
 		} else if(strcmp(command, "D_sure") == 0) {
@@ -277,8 +277,9 @@ void catOnlineUsers(char *sendline)
 	strcat(sendline, "Online users:\n");
 	pthread_mutex_lock(&onlineUsers_mutex);
 	for(std::set<User *>::iterator iter = onlineUsers.begin() ; iter != onlineUsers.end() ; iter++) {
-		sprintf(temp, "%10s, ", (*iter)->account);
+		sprintf(temp, "%10s |", (*iter)->account);
 		strcat(sendline, temp);
 	}
+	strcat(sendline, "\n");
 	pthread_mutex_unlock(&onlineUsers_mutex);
 }

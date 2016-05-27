@@ -10,8 +10,9 @@ ssize_t writen(int fd, const void *tosend, size_t n);
 int create_listenfd(int port);
 static void * show_thread(void *arg);
 
-void chat_creator();
-void char_connector();
+void chat_creator(const char *peerAccount);
+void chat_connector(const char *IP, const char *peerAccount);
+void simpleChat(int peerfd, const char *peerAccount);
 
 void sprintFiles(char *sendline);
 void fillInfo(struct sockaddr_in *servaddr, int port, const char *ip_v4);
@@ -83,23 +84,76 @@ void hw3_client(FILE *fp, int ctrlfd)
 				sprintFiles(sendline);
 				writen(ctrlfd, sendline, strlen(sendline));
 			} else if(strcmp(command, "Listen_Chat") == 0) {
-				int chatListenfd = create_listenfd(CHAT_PORT);
-				listen(chatListenfd, LISTEN_Q);
+				char peerAccount[100];
+				sscanf(recvline, "%*s %s", peerAccount);
+				chat_creator(peerAccount);
 			} else if(strcmp(command, "Connect_Chat") == 0) {
-				//char address[100];
+				char address[100];
+				char peerAccount[100];
+				sscanf(recvline, "%*s %s %s", address, peerAccount);
+				chat_connector(address, peerAccount);
 			}
 		}
 	}
 
 }
 
-void chat_creator()
+void chat_creator(const char *peerAccount)
 {
+	int chatListenfd = create_listenfd(CHAT_PORT);
+	listen(chatListenfd, LISTEN_Q);
+	sockaddr_in peeraddr;
+	socklen_t peerlen = sizeof(peeraddr);
 
+	int peerfd = accept(chatListenfd, (struct sockaddr *)&peeraddr, &peerlen);
+	close(chatListenfd);
+
+	simpleChat(peerfd, peerAccount);
+	close(peerfd);
 }
-void char_acceptor()
+void chat_connector(const char *ip_v4, const char *peerAccount)
 {
+	sockaddr_in peeraddr;
+	fillInfo(&peeraddr, CHAT_PORT, ip_v4);
 
+	int peerfd;
+	if( (peerfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) perror("socket error");
+	while(connect(peerfd, (struct sockaddr *)&peeraddr, sizeof(peeraddr)) < 0) {
+		usleep(2000);
+	}
+
+	simpleChat(peerfd, peerAccount);
+	close(peerfd);
+}
+void simpleChat(int peerfd, const char *pa)
+{
+	char peerAccount[100];
+	strcpy(peerAccount, pa);
+	fprintf(stdout, "     Chat start!\n");
+	char sendline[MAXLINE*100];
+	char recvline[MAXLINE+1];
+
+	fd_set rset, allset;
+	FD_ZERO(&allset);
+	FD_SET(peerfd, &allset);
+	FD_SET(STDIN_FILENO, &allset);
+	for( ; ; ) {
+		rset = allset;
+		int maxfd = (peerfd > STDIN_FILENO) ? peerfd : STDIN_FILENO;
+		select(maxfd+1, &rset, NULL, NULL, NULL);
+
+		if(FD_ISSET(STDIN_FILENO, &rset)) { // stdin has something to read
+			if( fgets(sendline, MAXLINE, stdin) == NULL ) break;
+			writen(peerfd, sendline, strlen(sendline));
+		}
+		if(FD_ISSET(peerfd, &rset)) {
+			int n = read(peerfd, recvline, MAXLINE);
+			if(n <= 0) break;
+			recvline[n] = '\0';
+			fprintf(stdout, "   %s: %s", peerAccount, recvline);
+		}
+	}
+	fprintf(stdout, "======= Chat is terminated! =======\n");
 }
 
 static void * show_thread(void *arg)
