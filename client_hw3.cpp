@@ -9,10 +9,10 @@ void hw3_client(FILE *fp, int ctrlfd);
 ssize_t writen(int fd, const void *tosend, size_t n);
 int create_listenfd(int port);
 static void * show_thread(void *arg);
-static void * ctrl_receive_thread(void *arg);
 
-static void * chat_creator(void *arg);
-static void * char_acceptor(void *arg);
+void chat_creator();
+void char_connector();
+
 void sprintFiles(char *sendline);
 void fillInfo(struct sockaddr_in *servaddr, int port, const char *ip_v4);
 
@@ -56,51 +56,50 @@ int main(int argc, char const *argv[])
 }
 void hw3_client(FILE *fp, int ctrlfd)
 {
-	//char recvline[MAXLINE+1];
 	char sendline[MAXLINE*100];
-	pthread_t tid;
-	if( pthread_create(&tid, NULL, ctrl_receive_thread, &ctrlfd) != 0) fprintf(stderr, "pthread_create error.\n");
-
-	while( fgets(sendline, MAXLINE, fp) != NULL ) {
-		writen(ctrlfd, sendline, strlen(sendline));
-	}
-}
-
-/* use thread to receive ctrlfd's message ? Or I can use select ?? */
-static void * ctrl_receive_thread(void *arg)
-{
-	pthread_detach(pthread_self());
-	int ctrlfd = *((int *)arg);
-
 	char recvline[MAXLINE+1];
-	char sendline[MAXLINE*10];
-	ssize_t n;
-	while( (n = read(ctrlfd, recvline, MAXLINE)) > 0) {
-		recvline[n] = '\0';
-		printf("          ctrlfd receive: %s\n", recvline);
-		char command[100];
-		sscanf(recvline, " %s", command);
-		if(strcmp(command, "Update_file_info") == 0) {
-			sprintFiles(sendline);
+	int fp_fileno = fileno(fp);
+	fd_set rset, allset;
+	FD_ZERO(&allset);
+	FD_SET(ctrlfd, &allset);
+	FD_SET(fp_fileno, &allset);
+	for( ; ; ) {
+		rset = allset;
+		int maxfd = (ctrlfd > fp_fileno) ? ctrlfd : fp_fileno;
+		select(maxfd+1, &rset, NULL, NULL, NULL);
+
+		if(FD_ISSET(fp_fileno, &rset)) { // stdin has something to read
+			if( fgets(sendline, MAXLINE, fp) == NULL ) break;
 			writen(ctrlfd, sendline, strlen(sendline));
-		} else if(strcmp(command, "Listen_Chat") == 0) {
-			int chatListenfd = create_listenfd(CHAT_PORT);
-			listen(chatListenfd, LISTEN_Q);
-		} else if(strcmp(command, "Connect_Chat") == 0) {
-			char address[100];
+		}
+		if(FD_ISSET(ctrlfd, &rset)) {
+			int n = read(ctrlfd, recvline, MAXLINE);
+			if(n <= 0) break;
+			recvline[n] = '\0';
+			printf("          ctrlfd receive: %s\n", recvline);
+			char command[100];
+			sscanf(recvline, " %s", command);
+			if(strcmp(command, "Update_file_info") == 0) {
+				sprintFiles(sendline);
+				writen(ctrlfd, sendline, strlen(sendline));
+			} else if(strcmp(command, "Listen_Chat") == 0) {
+				int chatListenfd = create_listenfd(CHAT_PORT);
+				listen(chatListenfd, LISTEN_Q);
+			} else if(strcmp(command, "Connect_Chat") == 0) {
+				//char address[100];
+			}
 		}
 	}
 
-	return NULL;
 }
 
-static void * chat_creator(void *arg)
+void chat_creator()
 {
-	return NULL;
+
 }
-static void * char_acceptor(void *arg)
+void char_acceptor()
 {
-	return NULL;
+
 }
 
 static void * show_thread(void *arg)
