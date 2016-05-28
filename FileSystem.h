@@ -17,6 +17,26 @@ private:
 		FileInfo(const char *cName, long long _size) : name(cName), size(_size) {}
 	};
 	std::set<FileInfo *>files;
+	
+	class FileSendTracker {
+	public:
+		FileInfo *sentFile;
+		FileSendTracker() {
+
+		}
+		void start() {
+
+		}
+		void suspend() {
+
+		}
+		void resume() {
+			
+		}
+		void terminate() {
+
+		}
+	};
 public:
 	FileSystem() {}
 	~FileSystem() {}
@@ -57,6 +77,28 @@ public:
 			if((*iter)->name.compare(cName) == 0) return true;
 		}
 		return false;
+	}
+	bool transFileTo(char *cName, User *requester)
+	{
+		auto iter = files.begin();
+		for(auto end = files.end() ; iter != end ; iter++) {
+			if((*iter)->name.compare(cName) == 0) break;
+		}
+		if(iter == end) {
+			fprintf(stderr, "You can't trans something not in file system\n");
+			return false;
+		}
+
+		FileInfo *target = (*iter);
+		int startPosition = 0;
+		long long leftSize = target->size;
+		int ownerNum = target->owners.size();
+		long long partSize = target->size / ownerNum;
+		while(leftByte > 0) {
+
+		}
+
+		return true;
 	}
 };
 
