@@ -33,6 +33,7 @@ char mainMenuString[MAXLINE];
 char Update_file_info_string[50];
 void initial()
 {
+	char temp[MAXLINE*100];
 	pthread_mutex_init(&onlineUsers_mutex, NULL);
 
 	strcpy(wellcomeString, "");
@@ -44,9 +45,14 @@ void initial()
 	}
 	fclose(ascii);
 
-	strcpy(mainMenuString, "------------------------------------\n");
-	strcat(mainMenuString, "  [SO]Show Others\n  [C]hat with <account>\n  [D_sure]Delete this account\n  [L]ogout\n  [H]elp\n");
-	strcat(mainMenuString, "------------------------------------\n");
+	strcpy(mainMenuString, "\n");
+	sprintf(temp, SGR_BLU_BOLD "%-30s%-30s%-30s\n" SGR_RESET, "[SU]Show online User", "[C]hat with <account>", "[D_sure]Delete this account");
+	strcat(mainMenuString, temp);
+	sprintf(temp, SGR_BLU_BOLD "%-30s%-30s%-30s\n" SGR_RESET, "[L]ogout", "[H]elp", "");
+	strcat(mainMenuString, temp);
+	//sprintf(temp, SGR_BLU_BOLD "%-30s%-30s%-30s\n" SGR_RESET, "", "", "");
+	//strcat(mainMenuString, temp);
+	strcat(mainMenuString, "\n");
 
 	strcpy(Update_file_info_string, "Update_file_info");
 }
@@ -185,7 +191,7 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 	while( read_safe(ctrlfd, recvline, MAXLINE))
 	{
 		sscanf(recvline, "%s", command);
-		if(strcmp(command, "SO") == 0) {
+		if(strcmp(command, "SU") == 0) {
 			sendline[0] = '\0';
 			catOnlineUsers(sendline);
 			accountMap.at(cppAccount)->write_to_showfd(sendline);
@@ -267,7 +273,8 @@ int create_listenfd(int port)
 	servaddr_in.sin_port = htons(port);
 
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
-	bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in));
+	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &servaddr_in, sizeof(servaddr_in));
+	if( bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in)) < 0 ) perror("bind error");
 	return listenfd;
 }
 
