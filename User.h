@@ -61,13 +61,13 @@ public:
 		this->state = OFFLINE;
 		onlineUsers.erase(this);
 	}
-	void write_to_showfd(char *sendBuffer)
+	void write_to_showfd(const char *sendBuffer)
 	{
 		pthread_mutex_lock(&showfd_mutex);
 		writen(showfd, sendBuffer, strlen(sendBuffer));
 		pthread_mutex_unlock(&showfd_mutex);
 	}
-	void write_to_ctrlfd(char *sendBuffer)
+	void write_to_ctrlfd(const char *sendBuffer)
 	{
 		pthread_mutex_lock(&ctrlfd_mutex);
 		writen(ctrlfd, sendBuffer, strlen(sendBuffer));
@@ -93,6 +93,10 @@ public:
 	void getIP(char *buffer)
 	{
 		inet_ntop(AF_INET, &this->addr_in.sin_addr, buffer, INET_ADDRSTRLEN);
+	}
+	int getPort()
+	{
+		return (int)(ntohs(addr_in.sin_port));
 	}
 };
 

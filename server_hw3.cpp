@@ -1,5 +1,6 @@
 #include "NP_necessary.h"
 #include "User.h"
+#include "FileSystem.h"
 #include <map>
 #include <set>
 
@@ -45,13 +46,18 @@ void initial()
 	}
 	fclose(ascii);
 
-	strcpy(mainMenuString, "\n");
-	sprintf(temp, SGR_BLU_BOLD "%-30s%-30s%-30s\n" SGR_RESET, "[SU]Show online User", "[C]hat with <account>", "[D_sure]Delete this account");
-	strcat(mainMenuString, temp);
-	sprintf(temp, SGR_BLU_BOLD "%-30s%-30s%-30s\n" SGR_RESET, "[L]ogout", "[H]elp", "");
-	strcat(mainMenuString, temp);
-	//sprintf(temp, SGR_BLU_BOLD "%-30s%-30s%-30s\n" SGR_RESET, "", "", "");
-	//strcat(mainMenuString, temp);
+	std::vector< std::string > menu;
+	menu.push_back( std::string("[SU]Show online User") );
+	menu.push_back( std::string("[C]hat with <account>") );
+	menu.push_back( std::string("[SF]Show file") );
+	menu.push_back( std::string("[D_sure]Delete this account") );
+	menu.push_back( std::string("[L]ogout") );
+	menu.push_back( std::string("[H]elp") );
+	for(int i=0, size = menu.size() ; i<size ; i++) {
+		if( i%3 == 0) strcat(mainMenuString, "\n");
+		sprintf(temp, SGR_BLU_BOLD "%-30s" SGR_RESET, menu[i].c_str());
+		strcat(mainMenuString, temp);
+	}
 	strcat(mainMenuString, "\n");
 
 	strcpy(Update_file_info_string, "Update_file_info");
@@ -195,6 +201,10 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 			sendline[0] = '\0';
 			catOnlineUsers(sendline);
 			accountMap.at(cppAccount)->write_to_showfd(sendline);
+		} else if(strcmp(command, "SF") == 0) {
+			sendline[0] = '\0';
+			//catOnlineFiles(sendline);
+			accountMap.at(cppAccount)->write_to_showfd(sendline);
 		} else if(strcmp(command, "C") == 0) {
 			char target[100];
 			sscanf(recvline, "%*s %s", target);
@@ -220,6 +230,7 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 		} else if(strcmp(command, "D_sure") == 0) {
 
 		} else if(strcmp(command, "L") == 0) {
+			accountMap.at(cppAccount)->write_to_showfd("Good Bye~\n");
 			accountMap.at(cppAccount)->logOut();
 			return;
 		} else if(strcmp(command, "H") == 0) {
@@ -283,8 +294,10 @@ void catOnlineUsers(char *sendline)
 	char temp[100];
 	strcat(sendline, "Online users:\n");
 	pthread_mutex_lock(&onlineUsers_mutex);
+	char buffer[200];
 	for(std::set<User *>::iterator iter = onlineUsers.begin() ; iter != onlineUsers.end() ; iter++) {
-		sprintf(temp, "%10s |", (*iter)->account);
+		(*iter)->getIP(buffer);
+		sprintf(temp, "   %-10s => IP: %-16s port: %-7d\n", (*iter)->account, buffer, (*iter)->getPort());
 		strcat(sendline, temp);
 	}
 	strcat(sendline, "\n");
