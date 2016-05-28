@@ -146,9 +146,9 @@ void chat_connector(const char *ip_v4, const char *peerAccount, bool *isChatting
 	printf("ip_v4 : %s\n", ip_v4);
 	sleep(1);
 	if( (peerfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) perror("socket error");
-	while(connect(peerfd, (struct sockaddr *)&peeraddr, sizeof(peeraddr)) < 0) {
+	if( connect(peerfd, (struct sockaddr *)&peeraddr, sizeof(peeraddr)) < 0) {
 		perror("connect error");
-		sleep(1);
+		return;
 	}
 	simpleChat(peerfd, peerAccount);
 	*isChatting = false;
@@ -232,6 +232,7 @@ int create_listenfd(int port)
 	servaddr_in.sin_port = htons(port);
 
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
+	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &servaddr_in, sizeof(servaddr_in));
 	if ( bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in)) < 0) perror("bind error");
 	return listenfd;
 }
