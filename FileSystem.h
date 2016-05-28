@@ -51,6 +51,13 @@ public:
 
 		strcat(sendline, SGR_RESET);
 	}
+	bool hasFileName(char *cName)
+	{
+		for(auto iter = files.begin(), end = files.end() ; iter != end ; iter++) {
+			if((*iter)->name.compare(cName) == 0) return true;
+		}
+		return false;
+	}
 };
 
 #endif

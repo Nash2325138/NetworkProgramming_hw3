@@ -4,11 +4,14 @@
 #define MAXLINE 2048
 #define SHOW_PORT 7000
 #define CHAT_PORT 7878
+#define DATA_LISTEN_PORT 7654
 #define LISTEN_Q 1024
 
 ssize_t writen(int fd, const void *tosend, size_t n);
 int create_listenfd(int port);
 long long getFileSize(FILE *fp);
+void sprintFiles(char *sendline);
+void fillInfo(struct sockaddr_in *servaddr, int port, const char *ip_v4);
 
 void hw3_client(FILE *fp, int ctrlfd);
 static void * show_thread(void *arg);
@@ -17,8 +20,8 @@ void chat_creator(const char *peerAccount, bool *isChatting);
 void chat_connector(const char *IP, const char *peerAccount, bool *isChatting);
 void simpleChat(int peerfd, const char *peerAccount);
 
-void sprintFiles(char *sendline);
-void fillInfo(struct sockaddr_in *servaddr, int port, const char *ip_v4);
+void data_listen();
+void data_receive(int fd);
 
 int main(int argc, char const *argv[])
 {
@@ -52,6 +55,9 @@ int main(int argc, char const *argv[])
 	// create show thread
 	pthread_t tid;
 	if( pthread_create(&tid, NULL, show_thread, &showfd) != 0) fprintf(stderr, "pthread_create error.\n");
+
+	// create data listening thread
+	std::thread(data_listen).detach();
 
 	// ctrl thread (just use main thread)
 	hw3_client(stdin, ctrlfd);
@@ -172,6 +178,32 @@ void simpleChat(int peerfd, const char *pa)
 	fprintf(stdout, "======= Chat is terminated! =======\n");
 }
 
+void data_listen()
+{
+	int listenfd = create_listenfd(DATA_LISTEN_PORT);
+	listen(listenfd, LISTEN_Q);
+	
+	sockaddr_in peeraddr;
+	socklen_t peerlen = sizeof(peeraddr);
+
+	fd_set rset, allset;
+	FD_ZERO(&allset);
+	FD_SET(listenfd, &allset);
+	for( ; ; ) {
+		rset = allset;
+		int maxfd = listenfd;
+		select(maxfd+1, &rset, NULL, NULL, NULL);
+		if( FD_ISSET(listenfd, &rset) ) {
+			int receive_fd = accept(listenfd, (struct sockaddr *)&peeraddr, &peerlen);
+			std::thread (data_receive, receive_fd).detach();
+		}
+	}
+	close(listenfd);
+}
+void data_receive(int fd)
+{
+	printf("!");
+}
 static void * show_thread(void *arg)
 {
 	pthread_detach(pthread_self());

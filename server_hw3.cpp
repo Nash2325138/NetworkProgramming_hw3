@@ -52,7 +52,8 @@ void initial()
 	menu.push_back( std::string("[SU]Show online User") );
 	menu.push_back( std::string("[C]hat with <account>") );
 	menu.push_back( std::string("[SF]Show file") );
-	menu.push_back( std::string("[D_sure]Delete this account") );
+	menu.push_back( std::string("[D]ownload <file name>") );
+	menu.push_back( std::string("[DA_sure]Delete this Account") );
 	menu.push_back( std::string("[L]ogout") );
 	menu.push_back( std::string("[H]elp") );
 	for(int i=0, size = menu.size() ; i<size ; i++) {
@@ -230,7 +231,18 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 				sprintf(sendline, "Connect_Chat %s %s", temp, cppAccount.c_str());
 				accountMap.at(cppTarget)->write_to_ctrlfd(sendline);
 			}
-		} else if(strcmp(command, "D_sure") == 0) {
+
+		} else if(strcmp(command, "D") == 0) {
+			char fileName[100];
+			fileName[0] = '\0';
+			sscanf(recvline, "%*s %s", fileName);
+			if(fileSystem.hasFileName(fileName)) {
+				sprintf(sendline, "Going to download file: %s\n", fileName);
+				accountMap.at(cppAccount)->write_to_showfd(sendline);
+			} else {
+				accountMap.at(cppAccount)->write_to_showfd("No such file\n");
+			}
+		} else if(strcmp(command, "DA_sure") == 0) {
 
 		} else if(strcmp(command, "L") == 0) {
 			accountMap.at(cppAccount)->write_to_showfd("Good Bye~\n");
