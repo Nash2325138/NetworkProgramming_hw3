@@ -1,4 +1,5 @@
 #include "NP_necessary.h"
+#include <thread>
 
 #define MAXLINE 2048
 #define SHOW_PORT 7000
@@ -10,8 +11,8 @@ ssize_t writen(int fd, const void *tosend, size_t n);
 int create_listenfd(int port);
 static void * show_thread(void *arg);
 
-void chat_creator(const char *peerAccount);
-void chat_connector(const char *IP, const char *peerAccount);
+void chat_creator(const char *peerAccount, bool *isChatting);
+void chat_connector(const char *IP, const char *peerAccount, bool *isChatting);
 void simpleChat(int peerfd, const char *peerAccount);
 
 void sprintFiles(char *sendline);
@@ -59,6 +60,8 @@ void hw3_client(FILE *fp, int ctrlfd)
 {
 	char sendline[MAXLINE*100];
 	char recvline[MAXLINE+1];
+	bool isChatting = false;
+
 	int fp_fileno = fileno(fp);
 	fd_set rset, allset;
 	FD_ZERO(&allset);
@@ -70,8 +73,10 @@ void hw3_client(FILE *fp, int ctrlfd)
 		select(maxfd+1, &rset, NULL, NULL, NULL);
 
 		if(FD_ISSET(fp_fileno, &rset)) { // stdin has something to read
-			if( fgets(sendline, MAXLINE, fp) == NULL ) break;
-			writen(ctrlfd, sendline, strlen(sendline));
+			if( isChatting == false ) {
+				if( fgets(sendline, MAXLINE, fp) == NULL ) break;
+				writen(ctrlfd, sendline, strlen(sendline));
+			}
 		}
 		if(FD_ISSET(ctrlfd, &rset)) {
 			int n = read(ctrlfd, recvline, MAXLINE);
@@ -86,47 +91,72 @@ void hw3_client(FILE *fp, int ctrlfd)
 			} else if(strcmp(command, "Listen_Chat") == 0) {
 				char peerAccount[100];
 				sscanf(recvline, "%*s %s", peerAccount);
-				chat_creator(peerAccount);
+				isChatting = true;
+				//std::thread (chat_creator, peerAccount, &isChatting).detach();
+				chat_creator(peerAccount, &isChatting);
 			} else if(strcmp(command, "Connect_Chat") == 0) {
 				char address[100];
 				char peerAccount[100];
 				sscanf(recvline, "%*s %s %s", address, peerAccount);
-				chat_connector(address, peerAccount);
+				isChatting = true;
+				//std::thread (chat_connector, address, peerAccount, &isChatting).detach();
+				chat_connector(address, peerAccount, &isChatting);
 			}
 		}
 	}
 
 }
 
-void chat_creator(const char *peerAccount)
+void chat_creator(const char *peerAccount, bool *isChatting)
 {
 	int chatListenfd = create_listenfd(CHAT_PORT);
 	listen(chatListenfd, LISTEN_Q);
+
 	sockaddr_in peeraddr;
 	socklen_t peerlen = sizeof(peeraddr);
 
-	int peerfd = accept(chatListenfd, (struct sockaddr *)&peeraddr, &peerlen);
+	fd_set rset, allset;
+	FD_ZERO(&allset);
+	FD_SET(chatListenfd, &allset);
+	struct timeval tv;
+	int peerfd;
+	for( ; ; ) {
+		rset = allset;
+		int maxfd = chatListenfd;
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;
+		select(maxfd+1, &rset, NULL, NULL, &tv);
+		if( FD_ISSET(chatListenfd, &rset) ) {
+			peerfd = accept(chatListenfd, (struct sockaddr *)&peeraddr, &peerlen);
+			break;
+		}
+	}
 	close(chatListenfd);
 
 	simpleChat(peerfd, peerAccount);
+	*isChatting = false;
 	close(peerfd);
 }
-void chat_connector(const char *ip_v4, const char *peerAccount)
+void chat_connector(const char *ip_v4, const char *peerAccount, bool *isChatting)
 {
 	sockaddr_in peeraddr;
 	fillInfo(&peeraddr, CHAT_PORT, ip_v4);
 
 	int peerfd;
+	printf("ip_v4 : %s\n", ip_v4);
+	sleep(1);
 	if( (peerfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) perror("socket error");
 	while(connect(peerfd, (struct sockaddr *)&peeraddr, sizeof(peeraddr)) < 0) {
-		usleep(2000);
+		perror("connect error");
+		sleep(1);
 	}
-
 	simpleChat(peerfd, peerAccount);
+	*isChatting = false;
 	close(peerfd);
 }
 void simpleChat(int peerfd, const char *pa)
 {
+	setbuf(stdin, NULL);
 	char peerAccount[100];
 	strcpy(peerAccount, pa);
 	fprintf(stdout, "     Chat start!\n");
@@ -202,14 +232,14 @@ int create_listenfd(int port)
 	servaddr_in.sin_port = htons(port);
 
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
-	bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in));
+	if ( bind(listenfd, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in)) < 0) perror("bind error");
 	return listenfd;
 }
 void fillInfo(struct sockaddr_in *servaddr, int port, const char *ip_v4)
 {
+	memset(servaddr, 0, sizeof(sockaddr_in));
 	servaddr->sin_family = AF_INET;
 	servaddr->sin_port = htons(port);
-	memset(servaddr->sin_zero, 0, sizeof(servaddr->sin_zero));
 	if(inet_pton(AF_INET, ip_v4, &servaddr->sin_addr) <= 0) perror("inet_pton error");
 }
 void sprintFiles(char *sendline)
