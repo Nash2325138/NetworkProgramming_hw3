@@ -92,15 +92,15 @@ void hw3_client(FILE *fp, int ctrlfd)
 				char peerAccount[100];
 				sscanf(recvline, "%*s %s", peerAccount);
 				isChatting = true;
-				//std::thread (chat_creator, peerAccount, &isChatting).detach();
-				chat_creator(peerAccount, &isChatting);
+				std::thread (chat_creator, peerAccount, &isChatting).detach();
+				//chat_creator(peerAccount, &isChatting);
 			} else if(strcmp(command, "Connect_Chat") == 0) {
 				char address[100];
 				char peerAccount[100];
 				sscanf(recvline, "%*s %s %s", address, peerAccount);
 				isChatting = true;
-				//std::thread (chat_connector, address, peerAccount, &isChatting).detach();
-				chat_connector(address, peerAccount, &isChatting);
+				std::thread (chat_connector, address, peerAccount, &isChatting).detach();
+				//chat_connector(address, peerAccount, &isChatting);
 			}
 		}
 	}
@@ -115,22 +115,7 @@ void chat_creator(const char *peerAccount, bool *isChatting)
 	sockaddr_in peeraddr;
 	socklen_t peerlen = sizeof(peeraddr);
 
-	fd_set rset, allset;
-	FD_ZERO(&allset);
-	FD_SET(chatListenfd, &allset);
-	struct timeval tv;
-	int peerfd;
-	for( ; ; ) {
-		rset = allset;
-		int maxfd = chatListenfd;
-		tv.tv_sec = 1;
-		tv.tv_usec = 0;
-		select(maxfd+1, &rset, NULL, NULL, &tv);
-		if( FD_ISSET(chatListenfd, &rset) ) {
-			peerfd = accept(chatListenfd, (struct sockaddr *)&peeraddr, &peerlen);
-			break;
-		}
-	}
+	int peerfd = accept(chatListenfd, (struct sockaddr *)&peeraddr, &peerlen);
 	close(chatListenfd);
 
 	simpleChat(peerfd, peerAccount);
@@ -144,11 +129,10 @@ void chat_connector(const char *ip_v4, const char *peerAccount, bool *isChatting
 
 	int peerfd;
 	printf("ip_v4 : %s\n", ip_v4);
-	sleep(1);
 	if( (peerfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) perror("socket error");
-	if( connect(peerfd, (struct sockaddr *)&peeraddr, sizeof(peeraddr)) < 0) {
-		perror("connect error");
-		return;
+	while( connect(peerfd, (struct sockaddr *)&peeraddr, sizeof(peeraddr)) < 0) {
+		fprintf(stdout, "Waiting...\n");
+		sleep(1);
 	}
 	simpleChat(peerfd, peerAccount);
 	*isChatting = false;
