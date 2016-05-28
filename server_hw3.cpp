@@ -10,6 +10,7 @@
 
 std::map<std::string, User *> accountMap;
 std::set<User *> onlineUsers;
+FileSystem fileSystem;
 pthread_mutex_t onlineUsers_mutex;
 void catOnlineUsers(char *sendline);
 
@@ -47,6 +48,7 @@ void initial()
 	fclose(ascii);
 
 	std::vector< std::string > menu;
+	strcpy(mainMenuString, SGR_BLU_BOLD);
 	menu.push_back( std::string("[SU]Show online User") );
 	menu.push_back( std::string("[C]hat with <account>") );
 	menu.push_back( std::string("[SF]Show file") );
@@ -55,10 +57,10 @@ void initial()
 	menu.push_back( std::string("[H]elp") );
 	for(int i=0, size = menu.size() ; i<size ; i++) {
 		if( i%3 == 0) strcat(mainMenuString, "\n");
-		sprintf(temp, SGR_BLU_BOLD "%-30s" SGR_RESET, menu[i].c_str());
+		sprintf(temp, "%-30s" , menu[i].c_str());
 		strcat(mainMenuString, temp);
 	}
-	strcat(mainMenuString, "\n");
+	strcat(mainMenuString, "\n" SGR_RESET);
 
 	strcpy(Update_file_info_string, "Update_file_info");
 }
@@ -203,7 +205,8 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 			accountMap.at(cppAccount)->write_to_showfd(sendline);
 		} else if(strcmp(command, "SF") == 0) {
 			sendline[0] = '\0';
-			//catOnlineFiles(sendline);
+			fileSystem.update(onlineUsers);
+			fileSystem.catFiles(sendline, onlineUsers);
 			accountMap.at(cppAccount)->write_to_showfd(sendline);
 		} else if(strcmp(command, "C") == 0) {
 			char target[100];
@@ -292,6 +295,7 @@ int create_listenfd(int port)
 void catOnlineUsers(char *sendline)
 {
 	char temp[100];
+	strcat(sendline, SGR_GRN);
 	strcat(sendline, "Online users:\n");
 	pthread_mutex_lock(&onlineUsers_mutex);
 	char buffer[200];
@@ -301,5 +305,6 @@ void catOnlineUsers(char *sendline)
 		strcat(sendline, temp);
 	}
 	strcat(sendline, "\n");
+	strcat(sendline, SGR_RESET);
 	pthread_mutex_unlock(&onlineUsers_mutex);
 }
