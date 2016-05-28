@@ -6,9 +6,11 @@
 #define CHAT_PORT 7878
 #define LISTEN_Q 1024
 
-void hw3_client(FILE *fp, int ctrlfd);
 ssize_t writen(int fd, const void *tosend, size_t n);
 int create_listenfd(int port);
+long long getFileSize(FILE *fp);
+
+void hw3_client(FILE *fp, int ctrlfd);
 static void * show_thread(void *arg);
 
 void chat_creator(const char *peerAccount, bool *isChatting);
@@ -236,7 +238,8 @@ void sprintFiles(char *sendline)
 	}
     
 	struct dirent *entry;
-	char sendBuffer[MAXLINE];
+	char sendBuffer[MAXLINE*100];
+	char temp[MAXLINE];
     int count = 0;
     sendBuffer[0] = '\0';
 
@@ -245,12 +248,22 @@ void sprintFiles(char *sendline)
 	{
 		if(entry->d_type == DT_DIR);
 		else {
-			strcat(sendBuffer, " ");
-	 		strcat(sendBuffer, entry->d_name);
+			FILE *fp = fopen(entry->d_name, "rb");
+			sprintf(temp, " %s %lld", entry->d_name, getFileSize(fp));
+			strcat(sendBuffer, temp);
 	 		count++;
 		}
 		entry = readdir(dir);
 	}
-	sprintf(sendline, "%d %s", count, sendBuffer);
+	snprintf(sendline, MAXLINE * 100, "%d %s", count, sendBuffer);
 	return;
+}
+
+// get a binary file's size
+long long getFileSize(FILE *fp)
+{
+	fseek(fp, 0L, SEEK_END);
+	long long ans = ftell(fp);
+	rewind(fp);
+	return ans;
 }

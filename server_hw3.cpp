@@ -57,7 +57,7 @@ void initial()
 	menu.push_back( std::string("[H]elp") );
 	for(int i=0, size = menu.size() ; i<size ; i++) {
 		if( i%3 == 0) strcat(mainMenuString, "\n");
-		sprintf(temp, "%-30s" , menu[i].c_str());
+		sprintf(temp, " %-30s" , menu[i].c_str());
 		strcat(mainMenuString, temp);
 	}
 	strcat(mainMenuString, "\n" SGR_RESET);
@@ -295,13 +295,12 @@ int create_listenfd(int port)
 void catOnlineUsers(char *sendline)
 {
 	char temp[100];
-	strcat(sendline, SGR_GRN);
-	strcat(sendline, "Online users:\n");
+	strcat(sendline, SGR_GRN_BOLD "\tOnline users:\n" SGR_YEL);
 	pthread_mutex_lock(&onlineUsers_mutex);
 	char buffer[200];
 	for(std::set<User *>::iterator iter = onlineUsers.begin() ; iter != onlineUsers.end() ; iter++) {
 		(*iter)->getIP(buffer);
-		sprintf(temp, "   %-10s => IP: %-16s port: %-7d\n", (*iter)->account, buffer, (*iter)->getPort());
+		sprintf(temp, "\t\t%-10s => IP: %-16s port: %-7d\n", (*iter)->account, buffer, (*iter)->getPort());
 		strcat(sendline, temp);
 	}
 	strcat(sendline, "\n");

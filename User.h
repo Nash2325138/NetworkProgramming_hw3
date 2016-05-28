@@ -28,7 +28,7 @@ public:
 	int showfd, ctrlfd;
 	pthread_mutex_t showfd_mutex;
 	pthread_mutex_t ctrlfd_mutex;
-	std::vector<std::string> fileList;
+	std::vector< std::pair<std::string, long long> > fileList;
 
 	User(char *account, char *password)
 	{
@@ -80,14 +80,15 @@ public:
 		sscanf(recvline, "%s", num);
 		char *position = recvline + (strlen(num) + 1);
 		char getName[100];
+		char getSize[50];
 		for(int i=0 ; i<atoi(num) ; i++) {
-			sscanf(position, "%s", getName);
-			fileList.push_back( std::string(getName) );
-			position += (strlen(getName) + 1);
+			sscanf(position, "%s %s", getName, getSize);
+			fileList.push_back( std::pair<std::string, long long>(std::string(getName), atoll(getSize)) );
+			position += (strlen(getName) + 1 + strlen(getSize) + 1);
 		}
 		std::cout << "User " << this->account << " has files:" << std::endl;
-		for(std::vector<std::string>::iterator iter = fileList.begin() ; iter != fileList.end() ; iter++) {
-			std::cout << "   " << *iter << std::endl;
+		for(auto iter = fileList.begin(), end = fileList.end() ; iter != end ; iter++) {
+			printf("\t%-20s  (%lld bytes)\n", iter->first.c_str(), iter->second);
 		}
 	}
 	void getIP(char *buffer)
