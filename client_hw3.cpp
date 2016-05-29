@@ -1,5 +1,8 @@
 #include "NP_necessary.h"
 #include <thread>
+#include <map>
+#include <set>
+#include <mutex>
 
 #define MAXLINE 2048
 #define SHOW_PORT 7000
@@ -22,6 +25,7 @@ void simpleChat(int peerfd, const char *peerAccount);
 
 void data_listen();
 void data_receive(int fd);
+void data_send(char *targetAddress, long long startPosition, long long sendSize);
 
 int main(int argc, char const *argv[])
 {
@@ -66,6 +70,7 @@ int main(int argc, char const *argv[])
 }
 void hw3_client(FILE *fp, int ctrlfd)
 {
+	std::map< std::string, std::set<std::recursive_mutex *> > account_mutexSet_map;
 	char sendline[MAXLINE*100];
 	char recvline[MAXLINE+1];
 	bool isChatting = false;
@@ -97,18 +102,29 @@ void hw3_client(FILE *fp, int ctrlfd)
 				sprintFiles(sendline);
 				writen(ctrlfd, sendline, strlen(sendline));
 			} else if(strcmp(command, "Listen_Chat") == 0) {
-				char peerAccount[100];
+				char *peerAccount = new char[100];
 				sscanf(recvline, "%*s %s", peerAccount);
 				isChatting = true;
 				std::thread (chat_creator, peerAccount, &isChatting).detach();
 				//chat_creator(peerAccount, &isChatting);
 			} else if(strcmp(command, "Connect_Chat") == 0) {
-				char address[100];
-				char peerAccount[100];
+				char *address = new char[100];
+				char *peerAccount = new char[100];
 				sscanf(recvline, "%*s %s %s", address, peerAccount);
 				isChatting = true;
 				std::thread (chat_connector, address, peerAccount, &isChatting).detach();
 				//chat_connector(address, peerAccount, &isChatting);
+			} else if(strcmp(command, "SendFile") == 0) {
+				char targetAccount[100];
+				char fileName[200];
+				char *targetAddress = new char[100];
+				long long startPosition;
+				long long sendSize;
+				sscanf(recvline, "%*s %s %s %s %lld %lld", targetAccount, fileName, targetAddress
+														 , &startPosition, &sendSize);
+				std::recursive_mutex *mutex_ptr = new std::recursive_mutex();
+				account_mutexSet_map[std::string(targetAccount)].insert(mutex_ptr);
+				std::thread(data_send, targetAddress, startPosition, sendSize).detach();
 			}
 		}
 	}
@@ -129,6 +145,7 @@ void chat_creator(const char *peerAccount, bool *isChatting)
 	simpleChat(peerfd, peerAccount);
 	*isChatting = false;
 	close(peerfd);
+	delete peerAccount;
 }
 void chat_connector(const char *ip_v4, const char *peerAccount, bool *isChatting)
 {
@@ -145,6 +162,9 @@ void chat_connector(const char *ip_v4, const char *peerAccount, bool *isChatting
 	simpleChat(peerfd, peerAccount);
 	*isChatting = false;
 	close(peerfd);
+
+	delete ip_v4;
+	delete peerAccount;
 }
 void simpleChat(int peerfd, const char *pa)
 {
@@ -203,6 +223,15 @@ void data_listen()
 void data_receive(int fd)
 {
 	printf("!");
+}
+void data_send(char *targetAddress, long long startPosition, long long sendSize)
+{
+	sockaddr_in peeraddr;
+	fillInfo(&peeraddr, DATA_LISTEN_PORT, targetAddress);
+	printf("?");
+
+
+	delete targetAddress;
 }
 static void * show_thread(void *arg)
 {

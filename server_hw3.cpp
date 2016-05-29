@@ -68,6 +68,7 @@ void initial()
 int create_listenfd(int port);
 int main(int argc, char const *argv[])
 {
+	setbuf(stdout, NULL);
 	if(argc != 2) {
 		fprintf(stderr, "Usage: ./<execute> <port>\n");
 		exit(EXIT_FAILURE);
@@ -233,7 +234,7 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 			}
 
 		} else if(strcmp(command, "D") == 0) {
-			char fileName[100];
+			char *fileName = new char[200];
 			fileName[0] = '\0';
 			sscanf(recvline, "%*s %s", fileName);
 			if(fileSystem.hasFileName(fileName)) {
@@ -247,6 +248,7 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 			} else {
 				accountMap.at(cppAccount)->write_to_showfd("No such file\n");
 			}
+			delete fileName;
 		} else if(strcmp(command, "DA_sure") == 0) {
 
 		} else if(strcmp(command, "L") == 0) {
