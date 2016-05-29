@@ -241,10 +241,7 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 				sprintf(sendline, "Going to download file: %s\n", fileName);
 				accountMap.at(cppAccount)->write_to_showfd(sendline);
 
-				if( fileSystem.transFileTo(fileName, accountMap.at(cppAccount)) == false) {
-					sprintf(sendline, "Error, didn't find: %s\n", fileName);
-					accountMap.at(cppAccount)->write_to_showfd(sendline);
-				}
+				fileSystem.transFileTo(fileName, accountMap.at(cppAccount));
 			} else {
 				accountMap.at(cppAccount)->write_to_showfd("No such file\n");
 			}

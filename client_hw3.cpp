@@ -23,9 +23,9 @@ void chat_creator(const char *peerAccount, bool *isChatting);
 void chat_connector(const char *IP, const char *peerAccount, bool *isChatting);
 void simpleChat(int peerfd, const char *peerAccount);
 
-void data_listen();
+void data_listen(int senderNum);
 void data_receive(int fd);
-void data_send(char *targetAddress, long long startPosition, long long sendSize);
+void data_send(char *targetAddress, long long startPosition, long long sendSize, std::recursive_mutex *mutex_ptr);
 
 int main(int argc, char const *argv[])
 {
@@ -59,9 +59,6 @@ int main(int argc, char const *argv[])
 	// create show thread
 	pthread_t tid;
 	if( pthread_create(&tid, NULL, show_thread, &showfd) != 0) fprintf(stderr, "pthread_create error.\n");
-
-	// create data listening thread
-	std::thread(data_listen).detach();
 
 	// ctrl thread (just use main thread)
 	hw3_client(stdin, ctrlfd);
@@ -124,7 +121,12 @@ void hw3_client(FILE *fp, int ctrlfd)
 														 , &startPosition, &sendSize);
 				std::recursive_mutex *mutex_ptr = new std::recursive_mutex();
 				account_mutexSet_map[std::string(targetAccount)].insert(mutex_ptr);
-				std::thread(data_send, targetAddress, startPosition, sendSize).detach();
+				std::thread(data_send, targetAddress, startPosition, sendSize, mutex_ptr).detach();
+			} else if(strcmp(command, "ListenData") == 0) {
+				// create data listening thread
+				int senderNum;
+				sscanf(recvline, "%*s %d", &senderNum);
+				std::thread(data_listen, senderNum).detach();
 			}
 		}
 	}
@@ -198,7 +200,7 @@ void simpleChat(int peerfd, const char *pa)
 	fprintf(stdout, "======= Chat is terminated! =======\n");
 }
 
-void data_listen()
+void data_listen(int senderNum)
 {
 	int listenfd = create_listenfd(DATA_LISTEN_PORT);
 	listen(listenfd, LISTEN_Q);
@@ -209,6 +211,7 @@ void data_listen()
 	fd_set rset, allset;
 	FD_ZERO(&allset);
 	FD_SET(listenfd, &allset);
+	int count = 0;
 	for( ; ; ) {
 		rset = allset;
 		int maxfd = listenfd;
@@ -216,7 +219,9 @@ void data_listen()
 		if( FD_ISSET(listenfd, &rset) ) {
 			int receive_fd = accept(listenfd, (struct sockaddr *)&peeraddr, &peerlen);
 			std::thread (data_receive, receive_fd).detach();
+			count++;
 		}
+		if(count == senderNum) break;
 	}
 	close(listenfd);
 }
@@ -224,7 +229,7 @@ void data_receive(int fd)
 {
 	printf("!");
 }
-void data_send(char *targetAddress, long long startPosition, long long sendSize)
+void data_send(char *targetAddress, long long startPosition, long long sendSize, std::recursive_mutex *mutex_ptr)
 {
 	sockaddr_in peeraddr;
 	fillInfo(&peeraddr, DATA_LISTEN_PORT, targetAddress);

@@ -4,6 +4,7 @@
 #include "User.h"
 #include <set>
 #include <string>
+#include <assert.h>
 
 class FileSystem
 {
@@ -37,6 +38,8 @@ private:
 				senderNum /= 2;
 				partSize = sentFile->size / senderNum;
 			}
+			sprintf(temp, "ListenData %d", senderNum);
+			target->write_to_ctrlfd(temp);
 
 			char targetIP[100];
 			target->getIP(targetIP);
@@ -49,6 +52,7 @@ private:
 				(*iter)->write_to_ctrlfd(temp);
 				startPosition += sendSize;
 			}
+			return;
 		}
 		void suspend() {
 
@@ -115,21 +119,19 @@ public:
 		}
 		return false;
 	}
-	bool transFileTo(char *cName, User *requester)
+	void transFileTo(char *cName, User *requester)
 	{
 		auto iter = files.begin();
 		for(auto end = files.end() ; iter != end ; iter++) {
 			if((*iter)->name.compare(cName) == 0) break;
 		}
-		if(iter == files.end()) {
-			fprintf(stderr, "You can't trans something not in file system\n");
-			return false;
-		}
+		assert(iter != files.end());
+
 		FileInfo *targetFile = (*iter);
 		FileSendTracker *tracker = new FileSendTracker(targetFile, requester);
 		trackers.push_back(tracker);
 		tracker->start();
-		return true;
+		return;
 	}
 };
 
