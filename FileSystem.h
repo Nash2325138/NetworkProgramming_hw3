@@ -47,8 +47,8 @@ private:
 			auto iter = sentFile->owners.begin();
 			for(int i=1 ; i<=senderNum ; i++, iter++) {
 				long long sendSize = (i == senderNum) ? (sentFile->size - startPosition) : (partSize);
-				sprintf(temp, "SendFile %s %s %s %lld %lld", target->account, sentFile->name.c_str(),
-															 targetIP, startPosition, sendSize);
+				sprintf(temp, "SendFile %s %s %s %d %lld %lld", target->account, sentFile->name.c_str(),
+															 targetIP, i, startPosition, sendSize);
 				(*iter)->write_to_ctrlfd(temp);
 				startPosition += sendSize;
 			}

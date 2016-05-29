@@ -1,4 +1,5 @@
 #include "NP_necessary.h"
+#include <vector>
 #include <thread>
 #include <map>
 #include <set>
@@ -25,7 +26,8 @@ void simpleChat(int peerfd, const char *peerAccount);
 
 void data_listen(int senderNum);
 void data_receive(int fd);
-void data_send(char *targetAddress, long long startPosition, long long sendSize, std::recursive_mutex *mutex_ptr);
+void data_send(const char *targetAddress, const char *fileName, int partNum, 
+				long long startPosition, long long sendSize, std::recursive_mutex *mutex_ptr);
 
 int main(int argc, char const *argv[])
 {
@@ -113,15 +115,16 @@ void hw3_client(FILE *fp, int ctrlfd)
 				//chat_connector(address, peerAccount, &isChatting);
 			} else if(strcmp(command, "SendFile") == 0) {
 				char targetAccount[100];
-				char fileName[200];
+				char *fileName = new char[200];
 				char *targetAddress = new char[100];
 				long long startPosition;
 				long long sendSize;
-				sscanf(recvline, "%*s %s %s %s %lld %lld", targetAccount, fileName, targetAddress
-														 , &startPosition, &sendSize);
+				int partNum;
+				sscanf(recvline, "%*s %s %s %s %d %lld %lld", targetAccount, fileName, targetAddress
+														 , &partNum, &startPosition, &sendSize);
 				std::recursive_mutex *mutex_ptr = new std::recursive_mutex();
 				account_mutexSet_map[std::string(targetAccount)].insert(mutex_ptr);
-				std::thread(data_send, targetAddress, startPosition, sendSize, mutex_ptr).detach();
+				std::thread(data_send, targetAddress, fileName, partNum, startPosition, sendSize, mutex_ptr).detach();
 			} else if(strcmp(command, "ListenData") == 0) {
 				// create data listening thread
 				int senderNum;
@@ -202,6 +205,8 @@ void simpleChat(int peerfd, const char *pa)
 
 void data_listen(int senderNum)
 {
+	printf("\tstart listening data\n");
+	std::vector< std::thread *> receiveThreads;
 	int listenfd = create_listenfd(DATA_LISTEN_PORT);
 	listen(listenfd, LISTEN_Q);
 	
@@ -218,25 +223,90 @@ void data_listen(int senderNum)
 		select(maxfd+1, &rset, NULL, NULL, NULL);
 		if( FD_ISSET(listenfd, &rset) ) {
 			int receive_fd = accept(listenfd, (struct sockaddr *)&peeraddr, &peerlen);
-			std::thread (data_receive, receive_fd).detach();
+			printf("\tAccept one data socket\n");
+			receiveThreads.push_back( new std::thread (data_receive, receive_fd) );
 			count++;
 		}
 		if(count == senderNum) break;
 	}
 	close(listenfd);
+	
+	// wait for all thread complete their file receptions
+	for(auto iter = receiveThreads.begin(), end = receiveThreads.end() ; iter != end ; iter++) {
+		(*iter)->join();
+	}
+
+	// reconstruct partial files into one file
 }
 void data_receive(int fd)
 {
-	printf("!");
+	char recvline[MAXLINE+1];
+	int n = read(fd, recvline, MAXLINE);
+	recvline[n] = '\0';
+	write(fd, "ack", 10);
+
+	char fileName[200];
+	int partNum;
+	long long leftSize;
+	sscanf(recvline, "%s %d %lld", fileName, &partNum, &leftSize);
+
+
+	char tempFileName[220];
+	sprintf(tempFileName, "%s_part%d", fileName, partNum);
+	FILE *tempFile = fopen(tempFileName, "wb");
+	printf("\tfile %s part %d ( %lld bytes ) receive starts\n", fileName, partNum, leftSize);
+	while( leftSize > 0 )
+	{
+		if( (n = read(fd, recvline, MAXLINE)) <= 0) {
+			perror("read error");
+			break;
+		}
+		n = fwrite(recvline, sizeof(char), n, tempFile);
+		leftSize -= n;
+		//printf("left now: %lld\t", leftSize);
+	}
+	printf("\tfile %s part %d receive completes\n", fileName, partNum);
+
+	fclose(tempFile);
+	close(fd);
 }
-void data_send(char *targetAddress, long long startPosition, long long sendSize, std::recursive_mutex *mutex_ptr)
+void data_send(const char *targetAddress, const char *fileName, int partNum, 
+				long long startPosition, long long sendSize, std::recursive_mutex *mutex_ptr)
 {
 	sockaddr_in peeraddr;
 	fillInfo(&peeraddr, DATA_LISTEN_PORT, targetAddress);
-	printf("?");
+	
+	int peerfd;
+	if( (peerfd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) perror("socket error");
+	while( connect(peerfd, (struct sockaddr *)&peeraddr, sizeof(peeraddr)) < 0) {
+		sleep(1);
+	}
 
+	char sendline[MAXLINE];
+	sprintf(sendline, "%s %d %lld", fileName, partNum, sendSize);
+	writen(peerfd, sendline, strlen(sendline));
+	
+	char ack[10];
+	read(peerfd, ack, 10);
+	if(strcmp(ack, "ack") != 0) fprintf(stderr, "\nWTF\n");
 
+	printf("\tfile %s part %d send starts (from %lld, total %lld)\n", fileName, partNum, startPosition, sendSize);
+	FILE *file = fopen(fileName, "rb");
+	fseek(file, startPosition, SEEK_SET);
+	long long totalSent = 0;
+	while(totalSent < sendSize) {
+		int toSendSize = ((sendSize - totalSent) >= MAXLINE) ? MAXLINE : (sendSize - totalSent);
+		fread(sendline, sizeof(char), toSendSize, file);
+		writen(peerfd, sendline, toSendSize);
+		totalSent += toSendSize;
+		//printf("total now: %lld\t", totalSent);
+	}
+
+	printf("\tfile %s part %d send completes\n", fileName, partNum);
+	fclose(file);
+	close(peerfd);
 	delete targetAddress;
+	delete fileName;
 }
 static void * show_thread(void *arg)
 {
