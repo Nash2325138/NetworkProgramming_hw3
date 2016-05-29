@@ -24,10 +24,10 @@ void chat_creator(const char *peerAccount, bool *isChatting);
 void chat_connector(const char *IP, const char *peerAccount, bool *isChatting);
 void simpleChat(int peerfd, const char *peerAccount);
 
-void data_listen(int senderNum);
+void data_listen(const char *fileName, int senderNum, int ctrlfd);
 void data_receive(int fd);
 void data_send(const char *targetAddress, const char *fileName, int partNum, 
-				long long startPosition, long long sendSize, std::recursive_mutex *mutex_ptr);
+				long long startPosition, long long sendSize, int *state);
 
 int main(int argc, char const *argv[])
 {
@@ -69,7 +69,8 @@ int main(int argc, char const *argv[])
 }
 void hw3_client(FILE *fp, int ctrlfd)
 {
-	std::map< std::string, std::set<std::recursive_mutex *> > account_mutexSet_map;
+	std::map< std::pair<std::string, std::string> , std::thread* > threadMap;
+	std::map< std::thread*, int* > stateMap;
 	char sendline[MAXLINE*100];
 	char recvline[MAXLINE+1];
 	bool isChatting = false;
@@ -122,14 +123,45 @@ void hw3_client(FILE *fp, int ctrlfd)
 				int partNum;
 				sscanf(recvline, "%*s %s %s %s %d %lld %lld", targetAccount, fileName, targetAddress
 														 , &partNum, &startPosition, &sendSize);
-				std::recursive_mutex *mutex_ptr = new std::recursive_mutex();
-				account_mutexSet_map[std::string(targetAccount)].insert(mutex_ptr);
-				std::thread(data_send, targetAddress, fileName, partNum, startPosition, sendSize, mutex_ptr).detach();
+				std::pair<std::string, std::string> filePair = std::pair<std::string, std::string>(std::string(targetAccount), std::string(fileName));
+				int *state = new int;
+				(*state) = 1;
+				threadMap[ filePair ] = new std::thread( data_send, targetAddress, fileName, partNum, startPosition, sendSize, state);
+				threadMap[ filePair ]->detach();
+				stateMap[ threadMap[filePair] ] = state;
 			} else if(strcmp(command, "ListenData") == 0) {
 				// create data listening thread
 				int senderNum;
-				sscanf(recvline, "%*s %d", &senderNum);
-				std::thread(data_listen, senderNum).detach();
+				char *fileName = new char[200];
+				sscanf(recvline, "%*s %s %d", fileName, &senderNum);
+				std::thread(data_listen, fileName, senderNum, ctrlfd).detach();
+			} else if(strcmp(command, "SendFile_suspend") == 0) {
+				char targetAccount[100];
+				char fileName[200];
+				sscanf(recvline, "%*s %s %s", targetAccount, fileName);
+				std::pair<std::string, std::string> filePair = std::pair<std::string, std::string>(std::string(targetAccount), std::string(fileName));
+				* (stateMap[ threadMap[filePair] ]) = 0;
+			} else if(strcmp(command, "SendFile_resume") == 0) {
+				char targetAccount[100];
+				char fileName[200];
+				sscanf(recvline, "%*s %s %s", targetAccount, fileName);
+				std::pair<std::string, std::string> filePair = std::pair<std::string, std::string>(std::string(targetAccount), std::string(fileName));
+				* (stateMap[ threadMap[filePair] ]) = 1;
+			} else if(strcmp(command, "SendFile_terminate") == 0) {
+				char targetAccount[100];
+				char fileName[200];
+				sscanf(recvline, "%*s %s %s", targetAccount, fileName);
+				std::pair<std::string, std::string> filePair = std::pair<std::string, std::string>(std::string(targetAccount), std::string(fileName));
+				* (stateMap[ threadMap[filePair] ]) = -1;
+			} else if(strcmp(command, "Cancle") == 0) {
+				char fileName[200];
+				int senderNum;
+				sscanf(recvline, "%*s %s %d", fileName, &senderNum);
+				char tempFileName[220];
+				for(int i=1 ; i<=senderNum ; i++) {
+					sprintf(tempFileName, "%s_part%d", fileName, i);
+					remove(tempFileName);
+				}
 			}
 		}
 	}
@@ -203,9 +235,9 @@ void simpleChat(int peerfd, const char *pa)
 	fprintf(stdout, "======= Chat is terminated! =======\n");
 }
 
-void data_listen(int senderNum)
+void data_listen(const char *fileName, int senderNum, int ctrlfd)
 {
-	printf("\tstart listening data\n");
+	printf("\tstart listening data of file %s\n", fileName);
 	std::vector< std::thread *> receiveThreads;
 	int listenfd = create_listenfd(DATA_LISTEN_PORT);
 	listen(listenfd, LISTEN_Q);
@@ -237,6 +269,15 @@ void data_listen(int senderNum)
 	}
 
 	// reconstruct partial files into one file
+	char temp[500];
+	for(int i=1 ; i<=senderNum ; i++) {
+		sprintf(temp, "cat %s_part%d >> %s", fileName, i, fileName);
+		system(temp);
+		sprintf(temp, "%s_part%d", fileName, i);
+		remove(temp);
+	}
+	strcpy(temp, "Update_file_info");
+	write(ctrlfd, temp, 400);
 }
 void data_receive(int fd)
 {
@@ -258,7 +299,7 @@ void data_receive(int fd)
 	while( leftSize > 0 )
 	{
 		if( (n = read(fd, recvline, MAXLINE)) <= 0) {
-			perror("read error");
+			printf("\tdata receive for file %s part %d terminated\n", fileName, partNum);
 			break;
 		}
 		n = fwrite(recvline, sizeof(char), n, tempFile);
@@ -271,7 +312,7 @@ void data_receive(int fd)
 	close(fd);
 }
 void data_send(const char *targetAddress, const char *fileName, int partNum, 
-				long long startPosition, long long sendSize, std::recursive_mutex *mutex_ptr)
+				long long startPosition, long long sendSize, int *state)
 {
 	sockaddr_in peeraddr;
 	fillInfo(&peeraddr, DATA_LISTEN_PORT, targetAddress);
@@ -294,7 +335,20 @@ void data_send(const char *targetAddress, const char *fileName, int partNum,
 	FILE *file = fopen(fileName, "rb");
 	fseek(file, startPosition, SEEK_SET);
 	long long totalSent = 0;
+	bool isSuspend = false;
 	while(totalSent < sendSize) {
+		if((*state) == 0) {
+			if(isSuspend == false) {
+				isSuspend = true;
+				printf("\tdata send for %s part %d suspend!\n", fileName, partNum);
+			}
+			sleep(1);
+		} else if((*state) == -1) {
+			printf("\tdata send for %s part %d terminated!\n", fileName, partNum);
+			break;
+		} else {
+			isSuspend = false;
+		}
 		int toSendSize = ((sendSize - totalSent) >= MAXLINE) ? MAXLINE : (sendSize - totalSent);
 		fread(sendline, sizeof(char), toSendSize, file);
 		writen(peerfd, sendline, toSendSize);

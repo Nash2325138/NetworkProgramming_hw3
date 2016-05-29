@@ -26,6 +26,7 @@ private:
 	public:
 		FileInfo *sentFile;
 		User *target;
+		std::set<User *>senders;
 		FileSendTracker(FileInfo *_in, User *_target) : sentFile(_in), target(_target) {}
 		void start() {
 			long long startPosition = 0;
@@ -38,7 +39,7 @@ private:
 				senderNum /= 2;
 				partSize = sentFile->size / senderNum;
 			}
-			sprintf(temp, "ListenData %d", senderNum);
+			sprintf(temp, "ListenData %s %d", sentFile->name.c_str(), senderNum);
 			target->write_to_ctrlfd(temp);
 
 			char targetIP[100];
@@ -50,18 +51,33 @@ private:
 				sprintf(temp, "SendFile %s %s %s %d %lld %lld", target->account, sentFile->name.c_str(),
 															 targetIP, i, startPosition, sendSize);
 				(*iter)->write_to_ctrlfd(temp);
+				senders.insert((*iter));
 				startPosition += sendSize;
 			}
 			return;
 		}
 		void suspend() {
-
+			char temp[2000];
+			sprintf(temp, "SendFile_suspend %s %s", this->target->account, this->sentFile->name.c_str());
+			for(User *sender: senders) {
+				sender->write_to_ctrlfd(temp);
+			}
 		}
 		void resume() {
-
+			char temp[2000];
+			sprintf(temp, "SendFile_resume %s %s", this->target->account, this->sentFile->name.c_str());
+			for(User *sender: senders) {
+				sender->write_to_ctrlfd(temp);
+			}
 		}
 		void terminate() {
-
+			char temp[2000];
+			sprintf(temp, "SendFile_terminate %s %s", this->target->account, this->sentFile->name.c_str());
+			for(User *sender: senders) {
+				sender->write_to_ctrlfd(temp);
+			}
+			sprintf(temp, "Cancle %s %lu", this->sentFile->name.c_str(), senders.size());
+			this->target->write_to_ctrlfd(temp);
 		}
 	};
 	std::vector<FileSendTracker *> trackers;
@@ -132,6 +148,30 @@ public:
 		trackers.push_back(tracker);
 		tracker->start();
 		return;
+	}
+	void suspendTrans(User *requester, char *fileNmae)
+	{
+		for(FileSendTracker* tracker : trackers) {
+			if(tracker->target == requester && tracker->sentFile->name.compare(fileNmae) == 0) {
+				tracker->suspend();
+			}
+		}
+	}
+	void resumeTrans(User *requester, char *fileNmae)
+	{
+		for(FileSendTracker* tracker : trackers) {
+			if(tracker->target == requester && tracker->sentFile->name.compare(fileNmae) == 0) {
+				tracker->resume();
+			}
+		}
+	}
+	void terminateTrans(User *requester, char *fileNmae)
+	{
+		for(FileSendTracker* tracker : trackers) {
+			if(tracker->target == requester && tracker->sentFile->name.compare(fileNmae) == 0) {
+				tracker->terminate();
+			}
+		}
 	}
 };
 

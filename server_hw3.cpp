@@ -53,12 +53,15 @@ void initial()
 	menu.push_back( std::string("[C]hat with <account>") );
 	menu.push_back( std::string("[SF]Show file") );
 	menu.push_back( std::string("[D]ownload <file name>") );
-	menu.push_back( std::string("[DA_sure]Delete this Account") );
+	menu.push_back( std::string("[SD]Suspend Download") );
+	menu.push_back( std::string("[RD]Resume Download") );
+	menu.push_back( std::string("[TD]Terminate Download") );
+	menu.push_back( std::string("[DA_sure]Delete Account") );
 	menu.push_back( std::string("[L]ogout") );
 	menu.push_back( std::string("[H]elp") );
 	for(int i=0, size = menu.size() ; i<size ; i++) {
 		if( i%3 == 0) strcat(mainMenuString, "\n");
-		sprintf(temp, " %-30s" , menu[i].c_str());
+		sprintf(temp, " %-28s" , menu[i].c_str());
 		strcat(mainMenuString, temp);
 	}
 	strcat(mainMenuString, "\n" SGR_RESET);
@@ -246,6 +249,18 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 				accountMap.at(cppAccount)->write_to_showfd("No such file\n");
 			}
 			delete fileName;
+		} else if(strcmp(command, "SD") == 0) {
+			char fileName[200];
+			sscanf(recvline, "%*s %s", fileName);
+			fileSystem.suspendTrans(accountMap.at(cppAccount), fileName);
+		} else if(strcmp(command, "RD") == 0) {
+			char fileName[200];
+			sscanf(recvline, "%*s %s", fileName);
+			fileSystem.resumeTrans(accountMap.at(cppAccount), fileName);
+		} else if(strcmp(command, "TD") == 0) {
+			char fileName[200];
+			sscanf(recvline, "%*s %s", fileName);
+			fileSystem.terminateTrans(accountMap.at(cppAccount), fileName);
 		} else if(strcmp(command, "DA_sure") == 0) {
 
 		} else if(strcmp(command, "L") == 0) {
@@ -254,6 +269,10 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 			return;
 		} else if(strcmp(command, "H") == 0) {
 			accountMap.at(cppAccount)->write_to_showfd(mainMenuString);
+		} else if(strcmp(command, "Update_file_info") == 0) {
+			accountMap.at(cppAccount)->write_to_ctrlfd(Update_file_info_string);
+			read_safe(ctrlfd, recvline, MAXLINE);
+			accountMap.at(cppAccount)->update_files(recvline);
 		}
 	}
 
