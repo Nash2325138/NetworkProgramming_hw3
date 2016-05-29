@@ -162,6 +162,7 @@ void hw3_client(FILE *fp, int ctrlfd)
 					sprintf(tempFileName, "%s_part%d", fileName, i);
 					remove(tempFileName);
 				}
+				remove(fileName);
 			}
 		}
 	}

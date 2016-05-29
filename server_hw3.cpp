@@ -262,9 +262,12 @@ void hw3_service(int ctrlfd, int showfd, struct sockaddr_in cliaddr_in)
 			sscanf(recvline, "%*s %s", fileName);
 			fileSystem.terminateTrans(accountMap.at(cppAccount), fileName);
 		} else if(strcmp(command, "DA_sure") == 0) {
-
+			accountMap.at(cppAccount)->write_to_showfd(SGR_RED_BOLD "Good Bye FOREVER D:\n" SGR_RESET);
+			accountMap.at(cppAccount)->logOut();
+			accountMap.erase(cppAccount);
+			return;
 		} else if(strcmp(command, "L") == 0) {
-			accountMap.at(cppAccount)->write_to_showfd("Good Bye~\n");
+			accountMap.at(cppAccount)->write_to_showfd(SGR_RED_BOLD "Good Bye~\n" SGR_RESET);
 			accountMap.at(cppAccount)->logOut();
 			return;
 		} else if(strcmp(command, "H") == 0) {
